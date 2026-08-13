@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Local environments and credentials
+.venv/
+venv/
+env/
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+
+# Computer Vision datasets and private media
+/computer_vision/data/
+/computer_vision/private_media/
+
+# Computer Vision temporary outputs
+/computer_vision/outputs/
+/computer_vision/runs/
+/computer_vision/wandb/
+
+# Logs
+*.log
+
+# Operating systems
+.DS_Store
+Thumbs.db
