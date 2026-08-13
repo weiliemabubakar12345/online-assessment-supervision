@@ -27,7 +27,7 @@ The Computer Vision component contains **three main perception modules**:
 
 1. **Person and object-cue detection**
 2. **Head-pose estimation**
-3. **Reliability-aware eye-gaze estimation**
+3. **Eye-Gaze Estimation**
 
 Their outputs are combined by the integration and event-processing layer:
 
@@ -48,7 +48,7 @@ The Event Manager and Event Logger are integration components rather than additi
 
 ## 4. Scope of the Three Perception Modules
 
-### 4.1 OIV7-Based Person and Object-Cue Detection
+### 4.1 Person and Object-Cue Detection
 
 The current object detector is initialized from `yolov8s-oiv7.pt`, an OIV7-pretrained YOLOv8s checkpoint, and fine-tuned using the selected **OIV7-Anchor Dataset V3**.
 
@@ -82,7 +82,7 @@ A neutral forward-facing baseline is established at the beginning of a monitorin
 
 The scope includes public-dataset evaluation, structured webcam trials, calibration, temporal stability checks, known pose-flip analysis, and output through the integration interface. Head direction is treated as an observable cue rather than proof of user intent.
 
-### 4.3 Reliability-Aware Eye-Gaze Estimation
+### 4.3 Eye-Gaze Estimation
 
 The gaze module uses L2CS-Net to estimate coarse gaze directions such as centre, left, right, up, and down. It does not attempt precise point-of-gaze or screen-coordinate tracking.
 
