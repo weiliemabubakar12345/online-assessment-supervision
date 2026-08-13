@@ -40,9 +40,49 @@ user directory, or absolute project path.
 | SciPy | `1.13.1` |
 | SoundDevice | `0.5.5` |
 
+## Prerequisite: Install Conda
+
+This project uses Conda to create and manage the Python environment. Install
+[Miniconda](https://docs.conda.io/projects/miniconda/en/latest/) or another
+compatible Conda distribution before continuing.
+
+After installation, open a terminal and verify that Conda is available:
+
+```bash
+conda --version
+```
+
+The commands in this document may be run from any terminal in which `conda`
+is recognized, including:
+
+- the VS Code integrated terminal;
+- PowerShell;
+- Windows Command Prompt;
+- Anaconda Prompt; or
+- Miniconda Prompt.
+
+On Windows, if `conda` is not recognized in VS Code, PowerShell, or Command
+Prompt, open Anaconda Prompt or Miniconda Prompt and use it for the setup. To
+enable Conda in PowerShell, run the following command from that prompt:
+
+```powershell
+conda init powershell
+```
+
+To enable Conda in Windows Command Prompt, run:
+
+```bat
+conda init cmd.exe
+```
+
+Completely close and reopen the affected terminal or VS Code after running
+`conda init`. If initialization is not desired or does not work, Anaconda
+Prompt or Miniconda Prompt remains a reliable option for all Conda commands.
+
 ## Create the Environment
 
-From the repository root, run:
+In a terminal where `conda` is recognized, navigate to the repository root and
+run:
 
 ```bash
 conda env create -f computer_vision/environments/teep_integration.yml
@@ -68,6 +108,24 @@ python -c "import sounddevice; print('SoundDevice import: OK')"
 
 The frozen evaluation baseline uses CPU inference. CUDA availability is not
 required for the canonical local evaluation.
+
+## VS Code Interpreter Setup
+
+After creating the environment, VS Code users should select its Python
+interpreter:
+
+1. Open the repository in VS Code.
+2. Press `Ctrl+Shift+P`.
+3. Select **Python: Select Interpreter**.
+4. Select the interpreter named `teep-integration`.
+5. Open a new VS Code terminal and confirm that the environment is active.
+
+If `teep-integration` is not listed, restart VS Code and repeat the selection.
+The environment may also be activated manually in the terminal:
+
+```bash
+conda activate teep-integration
+```
 
 ## External Model Files
 
