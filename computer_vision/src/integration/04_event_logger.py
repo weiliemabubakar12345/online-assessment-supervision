@@ -22,6 +22,7 @@ This module:
 - logs START / END lifecycle records to JSONL;
 - writes one CSV row for each completed event;
 - logs transitions of rejected/filtered event candidates for debugging;
+- logs the downstream review-score breakdown for every integration frame;
 - writes session metadata and a final session summary;
 - never invents an END event when the program quits.
 
@@ -80,8 +81,11 @@ class EventLogger:
     - events.jsonl
     - completed_events.csv
     - filtered_candidates.jsonl
+    - review_scores.jsonl
     - session_summary.json
     """
+
+    REVIEW_LOG_FLUSH_EVERY = 30
 
     CSV_FIELDS = [
         "session_id",
@@ -135,6 +139,9 @@ class EventLogger:
         self.filtered_jsonl_path = (
             self.session_dir / "filtered_candidates.jsonl"
         )
+        self.review_scores_jsonl_path = (
+            self.session_dir / "review_scores.jsonl"
+        )
         self.metadata_path = self.session_dir / "session_metadata.json"
         self.summary_path = self.session_dir / "session_summary.json"
 
@@ -147,6 +154,11 @@ class EventLogger:
             newline="",
         )
         self._filtered_fp = self.filtered_jsonl_path.open(
+            "a",
+            encoding="utf-8",
+            newline="",
+        )
+        self._review_scores_fp = self.review_scores_jsonl_path.open(
             "a",
             encoding="utf-8",
             newline="",
@@ -169,15 +181,22 @@ class EventLogger:
         self._lifecycle_counts: Counter[str] = Counter()
         self._completed_by_cue: Counter[str] = Counter()
         self._filtered_episode_counts: Counter[str] = Counter()
+        self._review_level_counts: Counter[str] = Counter()
+        self._review_sample_count = 0
+        self._final_review_score: Optional[float] = None
+        self._final_review_level: Optional[str] = None
+        self._review_peak_score = 0.0
+        self._review_peak_timestamp: Optional[float] = None
 
         metadata = {
             "session_id": self.session_id,
             "session_start_wall_time": self.session_start_wall_time,
-            "logger_version": "04_event_logger_v2",
+            "logger_version": "04_event_logger_v3",
             "files": {
                 "events_jsonl": self.events_jsonl_path.name,
                 "completed_events_csv": self.completed_csv_path.name,
                 "filtered_candidates_jsonl": self.filtered_jsonl_path.name,
+                "review_scores_jsonl": self.review_scores_jsonl_path.name,
                 "session_summary_json": self.summary_path.name,
             },
             "integration_session_metadata": _safe_json(
@@ -191,7 +210,13 @@ class EventLogger:
 
         self._closed = False
 
-    def _write_jsonl(self, fp: Any, record: Mapping[str, Any]) -> None:
+    def _write_jsonl(
+        self,
+        fp: Any,
+        record: Mapping[str, Any],
+        *,
+        flush: bool = True,
+    ) -> None:
         fp.write(
             json.dumps(
                 _safe_json(dict(record)),
@@ -199,7 +224,89 @@ class EventLogger:
             )
             + "\n"
         )
-        fp.flush()
+        if flush:
+            fp.flush()
+
+    def _log_review_score(
+        self,
+        *,
+        review_score_output: Mapping[str, Any],
+        frame_timestamp: float,
+    ) -> None:
+        """Persist the scorer's existing output without recomputing it."""
+        try:
+            score = float(review_score_output.get("score", 0.0))
+        except (TypeError, ValueError):
+            score = 0.0
+
+        review_level = str(
+            review_score_output.get("review_level", "LOW")
+        ).upper()
+
+        try:
+            session_peak_score = float(
+                review_score_output.get("session_peak_score", score)
+            )
+        except (TypeError, ValueError):
+            session_peak_score = score
+
+        session_peak_timestamp = review_score_output.get(
+            "session_peak_timestamp"
+        )
+
+        record = {
+            "record_type": "REVIEW_SCORE",
+            "session_id": self.session_id,
+            "wall_time": _now_local_iso(),
+            "frame_timestamp": float(frame_timestamp),
+            "score_timestamp": review_score_output.get(
+                "timestamp",
+                frame_timestamp,
+            ),
+            "score_version": review_score_output.get("score_version"),
+            "score": score,
+            "review_level": review_level,
+            "active_cues": _safe_json(
+                review_score_output.get("active_cues", [])
+            ),
+            "active_domains": _safe_json(
+                review_score_output.get("active_domains", [])
+            ),
+            "contributions": _safe_json(
+                review_score_output.get("contributions", {})
+            ),
+            "contribution_total": review_score_output.get(
+                "contribution_total",
+                0.0,
+            ),
+            "concurrency_bonus": review_score_output.get(
+                "concurrency_bonus",
+                0.0,
+            ),
+            "ignored_cues": _safe_json(
+                review_score_output.get("ignored_cues", [])
+            ),
+            "session_peak_score": session_peak_score,
+            "session_peak_timestamp": session_peak_timestamp,
+            "explanation": review_score_output.get("explanation", ""),
+        }
+
+        self._review_sample_count += 1
+        self._review_level_counts[review_level] += 1
+        self._final_review_score = score
+        self._final_review_level = review_level
+
+        if session_peak_score >= self._review_peak_score:
+            self._review_peak_score = session_peak_score
+            self._review_peak_timestamp = session_peak_timestamp
+
+        self._write_jsonl(
+            self._review_scores_fp,
+            record,
+            flush=(
+                self._review_sample_count % self.REVIEW_LOG_FLUSH_EVERY == 0
+            ),
+        )
 
     @staticmethod
     def _multi_cue_snapshot(
@@ -602,6 +709,7 @@ class EventLogger:
         *,
         event_output: Mapping[str, Any],
         frame_timestamp: float,
+        review_score_output: Optional[Mapping[str, Any]] = None,
     ) -> None:
         """Persist meaningful changes from one 03 event-manager output."""
         if self._closed:
@@ -618,6 +726,11 @@ class EventLogger:
             event_output=event_output,
             frame_timestamp=float(frame_timestamp),
         )
+        if isinstance(review_score_output, Mapping):
+            self._log_review_score(
+                review_score_output=review_score_output,
+                frame_timestamp=float(frame_timestamp),
+            )
 
     def close(
         self,
@@ -659,7 +772,7 @@ class EventLogger:
 
         summary = {
             "session_id": self.session_id,
-            "logger_version": "04_event_logger_v2",
+            "logger_version": "04_event_logger_v3",
             "session_start_wall_time": self.session_start_wall_time,
             "session_end_wall_time": self.session_end_wall_time,
             "final_frame_timestamp": final_frame_timestamp,
@@ -673,6 +786,14 @@ class EventLogger:
             "filtered_episode_counts_by_cue": dict(
                 self._filtered_episode_counts
             ),
+            "review_score_samples": int(self._review_sample_count),
+            "review_level_sample_counts": dict(
+                self._review_level_counts
+            ),
+            "final_review_score": self._final_review_score,
+            "final_review_level": self._final_review_level,
+            "session_peak_review_score": self._review_peak_score,
+            "session_peak_review_timestamp": self._review_peak_timestamp,
             "open_events_at_session_end": _safe_json(
                 self._open_events
             ),
@@ -693,10 +814,12 @@ class EventLogger:
 
         self._events_fp.flush()
         self._filtered_fp.flush()
+        self._review_scores_fp.flush()
         self._csv_fp.flush()
 
         self._events_fp.close()
         self._filtered_fp.close()
+        self._review_scores_fp.close()
         self._csv_fp.close()
 
         self._closed = True
@@ -711,6 +834,9 @@ class EventLogger:
             "completed_events_csv": str(self.completed_csv_path),
             "filtered_candidates_jsonl": str(
                 self.filtered_jsonl_path
+            ),
+            "review_scores_jsonl": str(
+                self.review_scores_jsonl_path
             ),
             "session_summary": str(self.summary_path),
         }

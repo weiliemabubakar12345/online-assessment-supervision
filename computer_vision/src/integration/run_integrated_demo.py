@@ -10,11 +10,13 @@ Live integration test for:
     02_yolo_output_adapter.py
     03_event_manager.py
     04_event_logger.py
+    05_multi_cue_review_score.py
 
 Purpose
 -------
 Run one webcam frame through the frozen head/gaze adapter and frozen YOLO
-adapter, then pass both normalized outputs to the event manager.
+adapter, pass both normalized outputs to the event manager, and calculate a
+downstream experimental review score from confirmed formal events.
 
 This is an integration/evaluation tool, not a cheating-decision system.
 
@@ -60,6 +62,29 @@ HEAD_GAZE_ADAPTER_PATH = INTEGRATION_DIR / "01_head_gaze_adapter.py"
 YOLO_ADAPTER_PATH = INTEGRATION_DIR / "02_yolo_output_adapter.py"
 EVENT_MANAGER_PATH = INTEGRATION_DIR / "03_event_manager.py"
 EVENT_LOGGER_PATH = INTEGRATION_DIR / "04_event_logger.py"
+REVIEW_SCORE_PATH = INTEGRATION_DIR / "05_multi_cue_review_score.py"
+DEFAULT_REVIEW_SCORE_CONFIG_PATH = (
+    PROJECT_ROOT
+    / "configs"
+    / "multi_cue_review_score_v1_1.json"
+)
+
+# Standard repository-relative runtime resource locations. These defaults make
+# the normal demo command portable across machines as long as README placement
+# instructions are followed. Every path can still be overridden from the CLI.
+DEFAULT_L2CS_ROOT = PROJECT_ROOT / "external" / "L2CS-Net"
+DEFAULT_L2CS_SNAPSHOT = (
+    PROJECT_ROOT / "models" / "l2cs" / "L2CSNet_gaze360.pkl"
+)
+DEFAULT_MEDIAPIPE_MODEL = (
+    PROJECT_ROOT / "models" / "mediapipe" / "face_landmarker.task"
+)
+DEFAULT_CANONICAL14_CSV = (
+    PROJECT_ROOT
+    / "resources"
+    / "mediapipe"
+    / "mediapipe_expanded_subset_14.csv"
+)
 
 DEFAULT_OUTPUT_DIR = (
     PROJECT_ROOT
@@ -77,8 +102,8 @@ DEFAULT_EVENT_LOG_DIR = (
     / "event_logs"
 )
 
-WINDOW_NAME = "TEEP Integrated Visual Cue Demo | UI v7"
-UI_VERSION = "v7-large-readable-panel"
+WINDOW_NAME = "TEEP Integrated Visual Cue Demo | UI v8"
+UI_VERSION = "v8-experimental-review-score"
 
 
 def _get_screen_size() -> tuple[int, int]:
@@ -427,6 +452,7 @@ def _draw_status_panel(
     head_gaze_output: Mapping[str, Any],
     yolo_output: Mapping[str, Any],
     event_output: Mapping[str, Any],
+    review_score_output: Mapping[str, Any],
     processing_fps: float,
     canvas_width: int,
     canvas_height: int,
@@ -497,6 +523,29 @@ def _draw_status_panel(
             if isinstance(e, Mapping)
             and e.get("lifecycle") in {"START", "END"}
         ]
+
+    review_score = float(review_score_output.get("score", 0.0) or 0.0)
+    review_level = str(review_score_output.get("review_level", "LOW"))
+    review_peak = float(
+        review_score_output.get("session_peak_score", 0.0) or 0.0
+    )
+    review_contributions = review_score_output.get("contributions", {})
+    if not isinstance(review_contributions, Mapping):
+        review_contributions = {}
+    ranked_review_cues = sorted(
+        review_contributions.items(),
+        key=lambda item: float(
+            item[1].get("contribution", 0.0)
+            if isinstance(item[1], Mapping)
+            else 0.0
+        ),
+        reverse=True,
+    )
+    top_review_cues = [
+        str(cue_key).split(":", 1)[-1]
+        for cue_key, _details in ranked_review_cues[:2]
+    ]
+    top_review_text = ", ".join(top_review_cues) or "none"
 
     # ---------------------------------------------------------------
     # Guided calibration overlay: user keeps looking at SCREEN CENTRE
@@ -733,26 +782,52 @@ def _draw_status_panel(
     cv2.putText(
         canvas,
         "TEEP VISUAL MONITOR",
-        (panel_x, 52),
+        (panel_x, 42),
         cv2.FONT_HERSHEY_SIMPLEX,
         1.00,
         dark,
         2,
         cv2.LINE_AA,
     )
+    review_colour = {
+        "LOW": (55, 120, 55),
+        "MODERATE": (35, 125, 180),
+        "HIGH": (35, 85, 190),
+        "VERY_HIGH": (45, 45, 175),
+    }.get(review_level, dark)
     cv2.putText(
         canvas,
-        f"YOLO {checkpoint_id}  |  {processing_fps:.1f} FPS  |  UI v7",
-        (panel_x, 88),
+        f"REVIEW {review_score:.2f} [{review_level}]",
+        (panel_x, 78),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.78,
+        review_colour,
+        2,
+        cv2.LINE_AA,
+    )
+    cv2.putText(
+        canvas,
+        f"Peak {review_peak:.2f}  |  Top: {top_review_text}",
+        (panel_x, 108),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.58,
+        muted,
+        1,
+        cv2.LINE_AA,
+    )
+    cv2.putText(
+        canvas,
+        f"YOLO {checkpoint_id}  |  {processing_fps:.1f} FPS  |  UI v8",
+        (panel_x, 136),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.62,
         muted,
         1,
         cv2.LINE_AA,
     )
-    cv2.line(canvas, (panel_x, 108), (panel_right, 108), line, 1)
+    cv2.line(canvas, (panel_x, 152), (panel_right, 152), line, 1)
 
-    y = 144
+    y = 184
     y = heading("CALIBRATION", y)
     y = put(phase, y, 0.78, dark, 2)
 
@@ -1088,16 +1163,51 @@ def _compact_status(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Live 01 + 02 + 03 + 04 integration test. "
-            "Uses the frozen integration event baseline."
+            "Live 01 + 02 + 03 + 04 + 05 integration test. "
+            "Uses the frozen integration event baseline plus a downstream "
+            "experimental review score."
         )
     )
 
-    # Head/gaze resources: same explicit inputs used by 01.
-    parser.add_argument("--l2cs-root", type=Path, required=True)
-    parser.add_argument("--snapshot", type=Path, required=True)
-    parser.add_argument("--mediapipe-model", type=Path, required=True)
-    parser.add_argument("--canonical14-csv", type=Path, required=True)
+    # Head/gaze resources use documented repository-relative defaults. The
+    # arguments remain available as optional overrides for experiments or
+    # machine-specific setups.
+    parser.add_argument(
+        "--l2cs-root",
+        type=Path,
+        default=DEFAULT_L2CS_ROOT,
+        help=(
+            "L2CS-Net source directory. Default: "
+            "computer_vision/external/L2CS-Net"
+        ),
+    )
+    parser.add_argument(
+        "--snapshot",
+        type=Path,
+        default=DEFAULT_L2CS_SNAPSHOT,
+        help=(
+            "L2CS gaze checkpoint. Default: computer_vision/models/l2cs/"
+            "L2CSNet_gaze360.pkl"
+        ),
+    )
+    parser.add_argument(
+        "--mediapipe-model",
+        type=Path,
+        default=DEFAULT_MEDIAPIPE_MODEL,
+        help=(
+            "MediaPipe Face Landmarker model. Default: computer_vision/"
+            "models/mediapipe/face_landmarker.task"
+        ),
+    )
+    parser.add_argument(
+        "--canonical14-csv",
+        type=Path,
+        default=DEFAULT_CANONICAL14_CSV,
+        help=(
+            "Canonical 14 landmark CSV. Default: computer_vision/resources/"
+            "mediapipe/mediapipe_expanded_subset_14.csv"
+        ),
+    )
     parser.add_argument("--head-gaze-device", default="cpu")
 
     # YOLO.
@@ -1199,7 +1309,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--verbose-json",
         action="store_true",
-        help="Print full 01/02/03 JSON periodically instead of compact status.",
+        help=(
+            "Print full 01/02/03 and experimental review-score JSON "
+            "periodically instead of compact status."
+        ),
     )
     parser.add_argument(
         "--print-active-events",
@@ -1220,6 +1333,16 @@ def parse_args() -> argparse.Namespace:
         help="Disable audio_device temporal events for debugging/ablation.",
     )
     parser.set_defaults(enable_audio_event=True)
+    parser.add_argument(
+        "--review-score-config",
+        type=Path,
+        default=DEFAULT_REVIEW_SCORE_CONFIG_PATH,
+        help=(
+            "External JSON file containing cue weights, confidence factors, "
+            "duration parameters, concurrency bonuses and review-level "
+            "thresholds."
+        ),
+    )
     parser.add_argument(
         "--event-log-dir",
         type=Path,
@@ -1274,7 +1397,37 @@ def parse_args() -> argparse.Namespace:
         ),
     )
 
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    required_resources = (
+        ("--l2cs-root", args.l2cs_root, "directory"),
+        ("--snapshot", args.snapshot, "file"),
+        ("--mediapipe-model", args.mediapipe_model, "file"),
+        ("--canonical14-csv", args.canonical14_csv, "file"),
+        ("--review-score-config", args.review_score_config, "file"),
+    )
+    missing_resources = []
+    for argument, path, expected_kind in required_resources:
+        resolved_path = Path(path).expanduser().resolve()
+        exists = (
+            resolved_path.is_dir()
+            if expected_kind == "directory"
+            else resolved_path.is_file()
+        )
+        if not exists:
+            missing_resources.append(
+                f"  {argument}: expected {expected_kind} at {resolved_path}"
+            )
+
+    if missing_resources:
+        parser.error(
+            "Required runtime resources are missing:\n"
+            + "\n".join(missing_resources)
+            + "\nPlace them in the documented repository locations or use "
+            "the corresponding command-line override."
+        )
+
+    return args
 
 
 def main() -> None:
@@ -1297,6 +1450,10 @@ def main() -> None:
         EVENT_LOGGER_PATH,
         "teep_event_logger",
     )
+    review_score_module = _load_local_module(
+        REVIEW_SCORE_PATH,
+        "teep_multi_cue_review_score",
+    )
 
     rules = event_module.build_initial_integration_rules(
         enable_audio_device_event=args.enable_audio_event,
@@ -1312,6 +1469,12 @@ def main() -> None:
         rules,
         object_event_eligibility=object_event_eligibility,
         suppress_no_person_if_face_present=True,
+    )
+    review_score_config = review_score_module.load_review_score_config(
+        args.review_score_config
+    )
+    review_scorer = review_score_module.MultiCueReviewScorer(
+        config=review_score_config
     )
 
     # Important: mirror_input=False because --mirror is applied once to the
@@ -1366,7 +1529,10 @@ def main() -> None:
         )
 
         session_metadata = {
-            "integration_mode": "01_head_gaze + 02_yolo + 03_event_manager + 04_event_logger",
+            "integration_mode": (
+                "01_head_gaze + 02_yolo + 03_event_manager + "
+                "04_event_logger + 05_multi_cue_review_score"
+            ),
             "yolo": yolo_metadata,
             "event_rules": rule_metadata,
             "object_event_eligibility": object_eligibility_metadata,
@@ -1389,6 +1555,30 @@ def main() -> None:
             "head_gaze_device": str(args.head_gaze_device),
             "yolo_runtime_mode": ("async_latest_frame" if args.async_yolo else "synchronous"),
             "yolo_stale_after_s": float(args.yolo_stale_after),
+            "experimental_review_score": {
+                "enabled": True,
+                "config_path": str(
+                    Path(args.review_score_config).expanduser().resolve()
+                ),
+                "score_version": str(review_scorer.config.score_version),
+                "cue_weights": dict(review_scorer.config.cue_weights),
+                "confidence_factors": dict(
+                    review_scorer.config.confidence_factors
+                ),
+                "duration_reference_s": float(
+                    review_scorer.config.duration_reference_s
+                ),
+                "duration_floor": float(
+                    review_scorer.config.duration_floor
+                ),
+                "concurrency_bonuses": dict(
+                    review_scorer.config.concurrency_bonuses
+                ),
+                "review_level_thresholds": dict(
+                    review_scorer.config.review_level_thresholds
+                ),
+                "disclaimer": str(review_scorer.config.disclaimer),
+            },
         }
         if args.verbose_json:
             print("\n[INTEGRATION_SESSION_METADATA]")
@@ -1607,12 +1797,18 @@ def main() -> None:
                 (time.perf_counter() - stage_start) * 1000.0,
             )
 
+            # The experimental scorer is downstream-only: it consumes the
+            # frozen Event Manager output and cannot alter detection or event
+            # lifecycle decisions.
+            review_score_output = review_scorer.process(event_output)
+
             last_frame_timestamp = float(frame_timestamp)
             stage_start = time.perf_counter()
             if event_logger is not None:
                 event_logger.process(
                     event_output=event_output,
                     frame_timestamp=frame_timestamp,
+                    review_score_output=review_score_output,
                 )
             _update_perf_ema(
                 "event_logger",
@@ -1713,6 +1909,14 @@ def main() -> None:
                     print(json.dumps(yolo_output, indent=2, ensure_ascii=False))
                     print("\n[EVENT_MANAGER_OUTPUT]")
                     print(json.dumps(event_output, indent=2, ensure_ascii=False))
+                    print("\n[EXPERIMENTAL_REVIEW_SCORE]")
+                    print(
+                        json.dumps(
+                            review_score_output,
+                            indent=2,
+                            ensure_ascii=False,
+                        )
+                    )
                 else:
                     status = _compact_status(
                         timestamp=frame_timestamp,
@@ -1731,7 +1935,10 @@ def main() -> None:
                         f"gaze={status['gaze']} | "
                         f"person={status['person_count']} | "
                         f"objects={status['objects']} | "
-                        f"active={active_text}"
+                        f"active={active_text} | "
+                        f"review={float(review_score_output['score']):.2f} "
+                        f"[{review_score_output['review_level']}] | "
+                        f"peak={float(review_score_output['session_peak_score']):.2f}"
                     )
                 last_print = now
 
@@ -1742,6 +1949,7 @@ def main() -> None:
                 head_gaze_output=head_gaze_output,
                 yolo_output=yolo_output,
                 event_output=event_output,
+                review_score_output=review_score_output,
                 processing_fps=fps_ema,
                 canvas_width=canvas_width,
                 canvas_height=canvas_height,
