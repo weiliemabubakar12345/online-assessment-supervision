@@ -3,13 +3,14 @@
 ## Overview
 
 This folder contains the webcam-based Computer Vision component of an
-online-assessment monitoring prototype. It detects and records observable
-visual cues that may require later human review.
+online-assessment monitoring prototype. It detects observable visual cues,
+converts sustained eligible observations into structured events, and records
+traceable evidence for later human review.
 
 The component does **not** determine whether an examinee is cheating, assign
-guilt, calculate a cheating score, or make disciplinary decisions. Its outputs
-must be interpreted together with timing, confidence, reliability, concurrent
-cues, and the limitations of the prototype.
+guilt, or make disciplinary decisions. The Experimental Visual-Cue Review
+Score is a transparent prioritisation aid, not a calibrated probability or an
+automatic verdict.
 
 ## Architecture
 
@@ -19,170 +20,122 @@ The component contains three perception modules:
 2. **Head-pose estimation**
 3. **Eye-gaze estimation**
 
-Their frame-level outputs are normalized by adapters and checked by
-cross-module validation. Eligible sustained cues are then converted into
-structured `START`-`ACTIVE`-`END` events and written to traceable logs.
+Their outputs are normalized by adapters, checked for reliability and selected
+cross-module contradictions, converted into `START`-`ACTIVE`-`END` events, and
+written to structured logs. A configurable review score can summarise the
+currently active eligible cues without replacing their underlying evidence.
 
 ```mermaid
 flowchart TD
-    A["Webcam or recorded video"] --> B["Perception modules"]
+    A["Webcam or recorded video"] --> B["Three perception modules"]
     B --> C["Adapters and reliability checks"]
     C --> D["Cross-module validation"]
     D --> E["Event Manager"]
     E --> F["Event Logger"]
+    E --> G["Experimental Visual-Cue Review Score"]
+    G --> F
 ```
 
-The Event Manager and Event Logger are integration components, not additional
-perception modules.
+The Event Manager, Event Logger, and review-score module are integration
+components, not additional perception modules.
 
-## Perception Modules
+## Frozen Runtime Baseline
 
-### Person and Object-Cue Detection
+- Object detector: OIV7-pretrained YOLOv8s fine-tuned on OIV7-Anchor Dataset V3
+- Selected checkpoint: `original_5e_best.pt`
+- YOLO settings: confidence `0.25`, image size `640`, IoU `0.45`, CPU,
+  asynchronous latest-frame inference
+- Head pose: MediaPipe landmarks, Canonical 14 geometry, and OpenCV `solvePnP`
+- Gaze: L2CS-Net with session calibration and MediaPipe eye-reliability checks
+- Audio-device event rule: confidence `0.43`, minimum duration `0.75 s`, release
+  grace `0.60 s`, cooldown `0.50 s`
+- Review-score configuration: `configs/multi_cue_review_score_v1_1.json`
 
-The current detector is initialized from `yolov8s-oiv7.pt`, an OIV7-pretrained
-YOLOv8s checkpoint, and fine-tuned on OIV7-Anchor Dataset V3.
-
-The selected global integration checkpoint is `original_5e_best.pt`. The base
-inference configuration uses a confidence threshold of `0.25`, an input size of
-`640`, and an IoU threshold of `0.45`.
-
-The detector and integration adapter use the following interface:
-
-| Model label | Integration label | Meaning |
-| --- | --- | --- |
-| `person` | `person` | Examinee or another visible person |
-| `phone` | `phone` | Mobile phone |
-| `laptop` | `computer_device` | Current laptop-related cue |
-| `book_notes` | `book_notes` | Book, paper, or notes |
-| `calculator` | `calculator` | Calculator |
-| `watch` | `watch` | Wristwatch or similar watch |
-| `audio_device` | `audio_device` | Headphones, headsets, wired earphones, or earbuds |
-
-`computer_device` is the integration-facing name mapped from the trained
-`laptop` class. The current model must not be described as a validated general
+The detector's trained `laptop` class is exposed as `computer_device`. This is
+an integration label; the current checkpoint is not a validated general
 detector for monitors or all computer equipment.
-
-### Head-Pose Estimation
-
-The head-pose module uses MediaPipe Face Mesh landmarks, a Canonical 14-point
-2D-3D correspondence configuration, and OpenCV `solvePnP`. A session-level
-neutral baseline is used to expose calibrated directional cues such as
-`HEAD_LEFT`, `HEAD_RIGHT`, `HEAD_UP`, and `HEAD_DOWN`.
-
-### Eye-Gaze Estimation
-
-The gaze module uses L2CS-Net with session-level centre-gaze calibration and
-MediaPipe-based eye-reliability checks. It estimates coarse centre, left,
-right, up, and down directions rather than a precise screen coordinate.
-
-Gaze-output availability is kept separate from gaze-event eligibility. Blink,
-eye closure, one-eye unavailability, profile views, uncertain landmarks, and
-head orientation can therefore suppress an unreliable independent gaze event
-while preserving useful diagnostic context.
-
-## Integration and Event Outputs
-
-The integration layer includes:
-
-- normalized YOLO and head/gaze adapters;
-- asynchronous latest-frame YOLO inference;
-- cross-module validation;
-- confidence, reliability, and cue-eligibility checks;
-- temporal event confirmation, release grace, and cooldown handling; and
-- JSONL, CSV, and session-summary logging.
-
-The conservative `audio_device` event rule uses:
-
-| Parameter | Value |
-| --- | ---: |
-| Event-eligibility confidence | `0.43` |
-| Minimum duration | `0.75 s` |
-| Release grace | `0.60 s` |
-| Cooldown | `0.50 s` |
-
-Detailed module-specific rules should be maintained in configuration and
-methodology documents rather than duplicated throughout the repository.
 
 ## Repository Structure
 
 ```text
 computer_vision/
-├── src/            # Reviewed runtime and module code
-├── evaluation/     # Evaluation scripts, protocols, and templates
-├── configs/        # Shareable runtime and evaluation configuration
-├── environments/   # Reproducible environment specifications
-├── docs/           # Scope, architecture, dataset, method, and handover docs
-├── results/        # Selected reviewed and anonymized evidence
-├── models/         # Model registry, model cards, and access instructions
-├── tests/          # Automated checks and smoke tests
+├── configs/        # Shareable runtime configuration
+├── docs/           # Scope, architecture, dataset, and handover documentation
+├── environments/   # Reproducible environment specification
+├── evaluation/     # Evaluation guidance, protocols, and templates
+├── models/         # Model registry and download/integrity instructions
+├── resources/      # Small tracked runtime resources
+├── src/            # Frozen integration runtime
+├── tests/          # Synthetic integration checks
 ├── .gitignore      # Computer-Vision-specific exclusions
 └── README.md       # This overview
 ```
 
-The folders are being populated progressively as canonical files are reviewed,
-cleaned, and verified.
+Runtime model binaries, the external L2CS-Net checkout, private media, and raw
+session outputs are intentionally excluded from ordinary Git tracking.
 
-## Current Status
+## Quick Start
 
-Implemented and tested:
+From the repository root:
 
-- the three perception modules;
-- standardized YOLO and head/gaze interfaces;
-- reliability-aware gaze-event eligibility;
-- selected cross-module validation rules;
-- asynchronous YOLO inference;
-- temporal event management; and
-- structured event logging.
+1. Create the environment using
+   [`environments/README.md`](environments/README.md).
+2. Download the three required runtime assets, clone L2CS-Net, and verify the
+   recorded checksums using [`models/README.md`](models/README.md).
+3. Follow [`src/integration/README.md`](src/integration/README.md) to run the
+   tests and launch the frozen baseline.
 
-Current handover work:
+Installing the Python environment alone is not sufficient. The YOLO
+checkpoint, L2CS checkpoint, MediaPipe Face Landmarker task, and external
+L2CS-Net source must also be present at the documented paths.
 
-- structured end-to-end event evaluation;
-- event-level failure analysis and result summaries;
-- canonical source-code selection and path cleanup;
-- environment and configuration verification;
-- model packaging and access instructions; and
-- final reproducibility and handover checks.
+## Verification
+
+Run the dependency-light synthetic checks from the repository root:
+
+```bat
+python -B computer_vision\tests\integration\test_multi_cue_review_score.py
+python -B computer_vision\tests\integration\test_review_score_event_logging.py
+```
+
+The full webcam smoke test additionally requires the environment and model
+assets described above.
 
 ## Documentation
 
 - [Project scope](docs/project_scope.md)
 - [Module overview](docs/module_overview.md)
 - [Object-detection class mapping](docs/datasets/class_mapping.md)
-- [Dataset sources and final V3 composition](docs/datasets/dataset_sources.md)
+- [Dataset sources and Dataset V3 composition](docs/datasets/dataset_sources.md)
+- [Environment setup](environments/README.md)
+- [Model registry and downloads](models/README.md)
+- [Integration runtime and commands](src/integration/README.md)
+- [Evaluation guide](evaluation/README.md)
+- [Final end-to-end protocol](evaluation/protocols/final_end_to_end_protocol.md)
+- [Handover file inventory](docs/handover/file_inventory.md)
 
-Evaluation protocols, configuration references, model documentation, and
-limitations will be linked here after their canonical versions are added.
+## Handover Status
 
-## Setup and Usage
+The code and documentation formerly maintained on separate branches are now
+intended to live together on the `computer-vision` branch. The frozen
+integration runtime, configuration, tests, setup guidance, model registry,
+evaluation protocol, and blank 90-trial template are present in this tree.
 
-The canonical environment specification, checkpoint access instructions, and
-runtime commands are being verified before publication. They will be added to
-`environments/`, `models/`, and this section after the corresponding canonical
-files have been tested from a clean setup.
+The archive audited on 20 August 2026 does **not** contain the filled formal
+trial log, reviewed result tables, final limitations summary, final architecture
+source files, or presentation/research-method artifacts. Add only reviewed,
+anonymized, shareable versions of those items; do not substitute the blank
+template for the completed evaluation evidence.
 
-Do not rely on historical experimental commands or machine-specific absolute
-paths as final reproduction instructions.
+## Data, Models, Privacy, and Responsible Use
 
-## Data, Models, and Privacy
+Do not commit raw datasets, identifiable webcam media, credentials, local
+environments, model binaries, external third-party repositories, raw session
+logs, or developer-specific absolute paths. Selected results must be reviewed
+and anonymized before sharing.
 
-This repository does not include:
-
-- raw or redistributed source datasets;
-- identifiable private webcam images or recordings;
-- complete local Conda environments;
-- temporary outputs, logs, or training runs;
-- redundant or unreviewed checkpoints;
-- credentials or machine-specific private configuration; or
-- duplicated third-party repositories and model files.
-
-Dataset provenance and class mappings are documented under `docs/datasets/`.
-Where a model cannot be redistributed, the repository should provide its
-source, version, integrity information where available, and access
-instructions. Selected results must be reviewed and anonymized before upload.
-
-## Responsible Use
-
-Every detection or event is a review cue, not proof of intent. Legitimate
-behaviour, camera angle, lighting, occlusion, participant differences, model
-errors, and dataset limitations can all affect the output. Any interpretation
-must retain human review and the contextual evidence recorded by the system.
+Every detection, event, and score is a review cue rather than proof of intent.
+Camera angle, lighting, occlusion, participant differences, legitimate
+behaviour, and model errors can all affect the output. Human review must retain
+the timestamps, reliability state, duration, concurrent cues, and source
+evidence.

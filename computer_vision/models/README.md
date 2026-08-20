@@ -1,4 +1,4 @@
-# Computer Vision Model Registry (Updated 17 August 2026)
+# Computer Vision Model Registry
 
 This directory documents the external source checkout and model assets required
 by the computer-vision runtime. Model binaries are not stored as ordinary Git

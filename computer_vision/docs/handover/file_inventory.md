@@ -1,181 +1,161 @@
 # Computer Vision Handover File Inventory
 
-## 1. Purpose
+## 1. Purpose and Audit Basis
 
-This inventory tracks which Computer Vision artifacts are suitable for the
-shared repository and what must happen before each artifact is uploaded. It is
-an evolving handover record rather than a list of every historical file created
-during the internship.
+This inventory records the canonical Computer Vision files present in the
+combined `computer-vision` branch archive audited on 20 August 2026. It replaces
+the earlier pre-merge inventory, which referred to local development paths and
+files that had not yet been selected.
 
-The inventory uses four classifications:
+The audit archive contained tracked files only. An item marked **not present**
+may exist elsewhere in the project; the label means only that it was not in the
+audited branch archive.
 
-| Classification | Meaning |
+| Status | Meaning |
 | --- | --- |
-| **Ready to upload** | Reviewed, shareable, and already suitable for its repository destination |
-| **Modification required** | Technically relevant, but paths, filenames, configuration, outputs, or code structure must be cleaned first |
-| **Documentation required** | The artifact may be retained or referenced only after its source, purpose, version, licence, configuration, or access instructions are documented |
-| **Do not upload** | Private, raw, redundant, temporary, machine-specific, unclear-licence, or otherwise unsuitable for the shared repository |
+| **Tracked** | Present in the audited branch and suitable for ordinary Git tracking |
+| **External** | Required locally but intentionally distributed or cloned outside ordinary Git tracking |
+| **Not present** | Expected handover evidence or documentation not found in the audited archive |
+| **Excluded** | Private, raw, temporary, redundant, or otherwise unsuitable for the shared repository |
 
-An artifact is not considered ready merely because it runs on the original
-development machine.
+## 2. Canonical Tracked Files
 
-## 2. Current Repository Entry Files
+### 2.1 Entry, Policy, and Configuration
 
-| Artifact | Repository destination | Classification | Status / action |
-| --- | --- | --- | --- |
-| Computer Vision overview | `computer_vision/README.md` | Ready to upload | Added on the documentation branch; update Quick Start after clean-setup verification |
-| Computer Vision ignore rules | `computer_vision/.gitignore` | Ready to upload | Added on the documentation branch |
-| Project scope | `computer_vision/docs/project_scope.md` | Ready to upload | Added on the documentation branch |
-| Module overview | `computer_vision/docs/module_overview.md` | Ready to upload | Added on the documentation branch |
-| Object-detection class mapping | `computer_vision/docs/datasets/class_mapping.md` | Ready to upload | Added on the documentation branch |
-| Dataset sources and V3 composition | `computer_vision/docs/datasets/dataset_sources.md` | Ready to upload | Added on the documentation branch; exact source access dates may be supplemented later |
-| Handover file inventory | `computer_vision/docs/handover/file_inventory.md` | Ready to upload | This file; update throughout the handover |
-
-## 3. Final Integration Code Candidates
-
-The following are known integration artifacts. They must be checked together
-because their interfaces and imports are interdependent.
-
-| Current artifact | Intended repository area | Classification | Required action |
-| --- | --- | --- | --- |
-| `src/14_integration/01_head_gaze_adapter.py` | `computer_vision/src/` | Modification required | Confirm it matches the final head/gaze interface and replace machine-specific paths or imports |
-| `src/14_integration/02_yolo_output_adapter.py` | `computer_vision/src/` | Modification required | Confirm the Dataset V3 label order and `laptop` to `computer_device` mapping |
-| `src/14_integration/03_event_manager_updated.py` | `computer_vision/src/` | Modification required | Freeze the final implementation, remove `_updated` from the canonical filename, and verify temporal configuration |
-| `src/14_integration/run_integrated_demo_updated.py` | `computer_vision/src/` | Modification required | Freeze the final entry point, remove `_updated`, replace local paths, and run a clean smoke test |
-| `src/14_integration/run_integrated_demo_ui_improved.py` | `computer_vision/src/` | Modification required | Compare with the selected final demo and retain only if it is not superseded |
-
-Before any integration script is marked ready:
-
-- imports must work from the proposed repository structure;
-- personal absolute paths must be removed;
-- model and resource locations must come from configuration or documented
-  command-line arguments;
-- no secret, personal, or identifiable data may be embedded;
-- the selected checkpoint and class mapping must be recorded; and
-- a smoke test must confirm startup, event generation, logging, and clean exit.
-
-The Event Logger and cross-module validation implementations are known parts of
-the final runtime, but their exact canonical filenames have not yet been
-recorded in this inventory. They must be added only after their actual files are
-selected; placeholder filenames must not be invented.
-
-## 4. Object-Detection Development and Evaluation Candidates
-
-### 4.1 Known Source Areas
-
-| Current source area | Classification | Handover decision |
+| Path | Status | Role |
 | --- | --- | --- |
-| `src/06_dataset_inspection/` | Modification required | Select only scripts needed to explain or reproduce the final dataset audit; exclude exploratory duplicates |
-| `src/07_yolo11_baseline/` | Modification required | Retain only the baseline method or evaluation files referenced by the final comparison |
-| `src/08_formal_baseline_evaluation/` | Modification required | Retain reviewed evaluation code and concise results required for traceability |
-| `src/09_custom_dataset/` | Modification required | Select final Dataset V3 preparation and validation scripts; remove absolute dataset roots |
-| `src/10_yolo11_finetuning/` | Modification required | Retain only training code or notebooks required to explain the final experiment history |
-| `src/11_finetuned_evaluation/` | Modification required | Select canonical checkpoint-comparison and audio-device evaluation files |
-| `src/14_yolo_improvement/` | Modification required | Treat as a candidate area; verify which files were actually used in the final OIV7-based model workflow |
+| `computer_vision/README.md` | Tracked | Component overview, Quick Start, links, and handover status |
+| `computer_vision/.gitignore` | Tracked | Module-specific data, model, media, output, and environment exclusions |
+| `computer_vision/configs/multi_cue_review_score_v1_1.json` | Tracked | Authoritative review-score weights, factors, bonuses, and levels |
 
-The directory names reflect the local development history. They do not have to
-be copied unchanged into the final repository. The final structure should
-prioritize responsibility and reproducibility rather than week or experiment
-number alone.
+### 2.2 Documentation
 
-### 4.2 Known Individual Evaluation Artifacts
-
-| Current artifact | Classification | Required action |
+| Path | Status | Role |
 | --- | --- | --- |
-| `08_live_yolo_checkpoint_comparison.py` | Modification required | Replace local checkpoint/output paths and document the unequal live-window limitation |
-| `17_audio_device_recorded_video_checkpoint_evaluation_updated.py` | Modification required | Remove `_updated` after final review, preserve FPS-aware duration logic, and document inputs and output schema |
-| `Week8_Day3_Audio_Device_Recorded_Video_Evaluation.ipynb` | Modification required | Remove credentials and local paths, clear unnecessary outputs, and add reproducible instructions |
-| `08_compare_oiv7_v1_bookclean_recorded_inputs.py` | Modification required | Retain only if referenced by the final dataset-development narrative |
-| `audit_custom_object_dataset_v2_targeted.py` | Modification required | Retain as historical audit evidence only if inputs and decisions are documented |
-| `build_v1_bookclean_candidate.py` | Modification required | Retain only if needed to explain the superseded BookClean experiment |
-| `OIV7_BookClean_Smoke_Test_Colab.ipynb` | Modification required | Historical experiment; review for duplication before upload |
-| `OIV7_BookClean_Smoke_and_Video_Validation_Colab.ipynb` | Modification required | Historical experiment; review for duplication before upload |
+| `computer_vision/docs/project_scope.md` | Tracked | Project boundary, objectives, evaluation scope, and responsible use |
+| `computer_vision/docs/module_overview.md` | Tracked | Architecture, interfaces, event lifecycle, scoring, and output flow |
+| `computer_vision/docs/datasets/class_mapping.md` | Tracked | Seven-class model and integration-facing label mapping |
+| `computer_vision/docs/datasets/dataset_sources.md` | Tracked | Dataset provenance and Dataset V3 composition |
+| `computer_vision/docs/handover/file_inventory.md` | Tracked | This combined-branch inventory |
 
-Older V1, V2, and BookClean artifacts must not be presented as the final Dataset
-V3 pipeline. If retained, they must be labelled as development-history or
-ablation material.
+### 2.3 Environment, Models, and Resources
 
-## 5. Model and Runtime Resource Inventory
-
-| Current artifact | Classification | Handover decision |
+| Path | Status | Role |
 | --- | --- | --- |
-| `models/yolo/live_checkpoint_selection/original_5e_best.pt` | Documentation required | Selected global integration checkpoint; decide whether to include the small project-generated file or provide a verified download record and checksum |
-| `models/yolo/live_checkpoint_selection/extended_epoch10.pt` | Documentation required | Alternative 15-epoch checkpoint; normally document in the model registry rather than upload by default |
-| `models/yolo/live_checkpoint_selection/extended_epoch25.pt` | Documentation required | Alternative 30-epoch checkpoint; normally document in the model registry rather than upload by default |
-| `models/yolo/live_checkpoint_selection/extended_best.pt` | Documentation required | Alternative 50-epoch checkpoint; document its audio-device strength and other-class trade-offs |
-| `models/experiment1/best.pt` | Do not upload | Historical checkpoint unless the final report requires an externally stored comparison artifact |
-| `external_models/L2CS-Net/models/L2CSNet_gaze360.pkl` | Do not upload | Third-party checkpoint; provide official source, expected location, and integrity information instead |
-| `models/mediapipe/face_landmarker.task` | Documentation required | Verify redistribution terms or provide official download instructions |
-| `data/canonical_face_model/canonical14_scaled.csv` | Documentation required | Verify provenance and document the Canonical 14 convention before inclusion |
+| `computer_vision/environments/README.md` | Tracked | Conda creation, verification, and clean-setup status |
+| `computer_vision/environments/teep_integration.yml` | Tracked | Frozen environment snapshot |
+| `computer_vision/models/README.md` | Tracked | Required assets, canonical paths, source, integrity, and distribution policy |
+| `computer_vision/resources/mediapipe/mediapipe_expanded_subset_14.csv` | Tracked | Canonical 14 geometry used by the head-pose pipeline |
 
-The repository-level model policy must be settled before any ignored model
-binary is force-added. Do not bypass `.gitignore` merely to make a local run
-work.
+### 2.4 Frozen Integration Runtime
 
-## 6. Environment and Configuration Inventory
-
-The local `teep-integration` Conda environment has been validated with L2CS,
-RetinaFace/`face_detection`, MediaPipe, Ultralytics `8.4.86`, PyTorch
-`2.8.0+cpu`, torchvision `0.23.0+cpu`, and OpenCV `5.0.0`; `pip check` passed.
-
-| Artifact | Classification | Required action |
+| Path | Status | Role |
 | --- | --- | --- |
-| Cleaned `teep-integration` environment specification | Modification required | Export a portable Conda YAML without machine-specific prefix information and verify it from a clean environment |
-| Runtime configuration for model/resource paths | Modification required | Replace absolute Windows paths with relative paths, configuration fields, or command-line arguments |
-| Example local configuration | Documentation required | Provide a sanitized example only; exclude real local configuration and credentials |
-| Complete local Conda environment directory | Do not upload | Recreate from the cleaned environment specification instead |
+| `computer_vision/src/integration/README.md` | Tracked | Required setup, model download link, runtime commands, outputs, and verification |
+| `computer_vision/src/integration/01_head_gaze_adapter.py` | Tracked | Head pose, L2CS gaze, calibration, eye reliability, and normalized output |
+| `computer_vision/src/integration/02_yolo_output_adapter.py` | Tracked | YOLO inference, class mapping, checkpoint selection, and freshness metadata |
+| `computer_vision/src/integration/03_event_manager.py` | Tracked | Cross-module validation, temporal rules, and event lifecycle |
+| `computer_vision/src/integration/04_event_logger.py` | Tracked | Event, candidate, score, metadata, CSV, and summary logging |
+| `computer_vision/src/integration/05_multi_cue_review_score.py` | Tracked | Experimental Visual-Cue Review Score implementation |
+| `computer_vision/src/integration/run_integrated_demo.py` | Tracked | Canonical webcam entry point and runtime orchestration |
 
-The exact environment and configuration filenames will be recorded after the
-portable files are created and tested.
+The `multi_cue` filenames are retained for code and configuration compatibility.
+Project-facing documentation uses **Experimental Visual-Cue Review Score**.
 
-## 7. Evaluation Protocols and Results
+### 2.5 Evaluation and Tests
 
-| Artifact group | Classification | Required action |
+| Path | Status | Role |
 | --- | --- | --- |
-| Final end-to-end evaluation protocol | Ready to upload after creation | Define scenarios, expected events, repetitions, duration, timestamps, pass criteria, and concurrent cues before formal trials |
-| End-to-end trial log template | Ready to upload after creation | Use a stable CSV schema before recording formal trials |
-| Selected module metrics and tables | Modification required | Copy only reviewed summaries into `results/`; retain method and denominator information |
-| Selected figures | Modification required | Remove personal information and verify that source media may be shared |
-| Raw event logs | Modification required | Anonymize and reduce to the evidence needed for reproducibility |
-| Raw webcam videos or identifiable screenshots | Do not upload | Keep private and outside Git |
-| Temporary output folders under `outputs/` | Do not upload | Preserve only reviewed, selected results in the final `results/` structure |
+| `computer_vision/evaluation/README.md` | Tracked | Evaluation folder guide and evidence-status boundary |
+| `computer_vision/evaluation/protocols/final_end_to_end_protocol.md` | Tracked | Frozen 30-scenario, 90-trial protocol |
+| `computer_vision/evaluation/templates/end_to_end_trial_log.csv` | Tracked | Blank formal trial-log template; not completed results |
+| `computer_vision/tests/integration/test_multi_cue_review_score.py` | Tracked | Synthetic score/configuration checks |
+| `computer_vision/tests/integration/test_review_score_event_logging.py` | Tracked | Logger compatibility and score-audit persistence checks |
 
-## 8. Dataset and Training-Data Inventory
+Both synthetic test scripts passed during the 20 August 2026 archive audit.
+All integration and test Python files also passed `py_compile` syntax checking.
+This does not replace a clean-machine webcam smoke test with the required model
+assets.
 
-| Current artifact | Classification | Handover decision |
+## 3. Required External Runtime Items
+
+These items are required for the full runtime but must remain outside ordinary
+project Git tracking:
+
+| Canonical local path | Status | Source / verification |
 | --- | --- | --- |
-| Final Dataset V3 raw images and YOLO labels | Do not upload | Document sources, mappings, build process, and counts instead |
-| `D:/TEEP_PROCESSED/custom_object_dataset_v1/` | Do not upload | Local historical dataset build |
-| `D:/TEEP_PROCESSED/custom_object_dataset_v2/` | Do not upload | Local historical dataset build |
-| `D:/TEEP_PROCESSED/custom_object_dataset_v1_bookclean_candidate/` | Do not upload | Local superseded candidate dataset |
-| `custom_object_dataset_v1_bookclean_candidate.tar.gz` | Do not upload | Raw/exported dataset archive |
-| `D:/TEEP_PROCESSED/custom_object_dataset_v1/mapping_manifest.csv` | Modification required | Contains provenance value but must be reviewed for absolute paths and redistribution-sensitive information before any derived manifest is shared |
+| `computer_vision/models/yolo/original_5e_best.pt` | External | Project shared Drive; verify size and SHA-256 in `models/README.md` |
+| `computer_vision/models/l2cs/L2CSNet_gaze360.pkl` | External | Project shared Drive; verify size and SHA-256 |
+| `computer_vision/models/mediapipe/face_landmarker.task` | External | Project shared Drive; verify size and SHA-256 |
+| `computer_vision/external/L2CS-Net/` | External | Clone from official upstream source; record the approved commit SHA |
 
-## 9. Repository-Wide Exclusions
+Optional 15e, 30e, and 50e YOLO comparison checkpoints are documented in the
+model registry and should be distributed only when comparison reproduction is
+required.
 
-The following must remain outside the shared repository:
+## 4. Handover Artifacts Not Present in the Audited Archive
+
+The following should be considered for addition before final repository
+handover. Do not invent or reconstruct numerical results from the blank
+template.
+
+| Recommended destination | Status | Required action |
+| --- | --- | --- |
+| `computer_vision/evaluation/results/final_end_to_end_trial_log.csv` | Not present | Add the reviewed, filled formal master log after removing private paths or identifiers |
+| `computer_vision/evaluation/results/final_end_to_end_summary.csv` | Not present | Add scenario-level outcomes with denominator and metric definitions |
+| `computer_vision/evaluation/results/README.md` | Not present | Explain evaluation date, hardware, frozen configuration, result files, and interpretation |
+| `computer_vision/evaluation/scripts/05_structured_integration_evaluation_protocol.py` | Not present | Add the reviewed helper if it is required to reproduce protocol timing and trial prompts |
+| `computer_vision/docs/limitations.md` | Not present | Consolidate fragmentation, multi-cue sensitivity, identity ambiguity, pose/gaze limits, and object-class limits |
+| `computer_vision/docs/architecture/` | Not present | Add the reviewed final architecture source and a shareable export if available |
+| `computer_vision/docs/methodology/` | Not present | Add the final research-method description if it is part of the handover scope |
+| `computer_vision/results/` | Not present | Add only selected, reviewed, anonymized tables or figures; never raw session logs or private frames |
+
+If the final presentation is required for project handover, place a reviewed
+copy under the repository's agreed project-level presentation area rather than
+duplicating it inside the runtime source directory.
+
+## 5. Verification Still Pending
+
+- Confirm intended-recipient access to the shared model folder.
+- Record and test the exact approved L2CS-Net commit SHA.
+- Recreate the Conda environment from `teep_integration.yml` on a clean machine.
+- Run both synthetic tests and a full webcam startup/calibration/quit smoke test
+  using the documented repository-relative asset layout.
+- Confirm the session closes with matched lifecycle transitions and no open
+  events.
+- Review every proposed result or media artifact for identifiers and private
+  filesystem paths before staging.
+
+Pending verification must stay labelled as pending; it should not be converted
+into a success statement without evidence.
+
+## 6. Explicit Exclusions
+
+Do not upload:
 
 - raw or redistributed datasets;
-- identifiable webcam images, recordings, or screenshots;
-- original unreviewed Daily Worklogs;
-- API keys, passwords, access tokens, and private configuration;
-- complete Conda or virtual-environment folders;
-- cache files, debug logs, temporary outputs, and interrupted runs;
-- duplicate external-model repositories;
-- machine-specific absolute paths in committed runtime files;
-- redundant checkpoints and unreviewed large binaries; and
-- files whose redistribution terms cannot be established.
+- identifiable webcam recordings, screenshots, or assessment content;
+- raw integration session directories and debug logs;
+- model binaries or the external L2CS-Net checkout;
+- credentials, `.env` files, or developer-specific absolute paths;
+- local Conda/virtual-environment directories and caches;
+- superseded `_updated`, `_final`, or duplicate experimental scripts when a
+  canonical tracked implementation already exists;
+- unreviewed notebook outputs; or
+- Daily Worklogs unless the project owner explicitly approves them for the
+  shared repository.
 
-## 10. Next Inventory Actions
+## 7. Final Pre-Push Check
 
-1. Freeze and rename the final Event Manager and integrated-demo files.
-2. Record the exact Event Logger and cross-module validation filenames.
-3. Review the final integration dependency set as one unit.
-4. Select the minimum Dataset V3 build, validation, and training artifacts
-   required for reproducibility.
-5. Create and clean the portable `teep-integration` environment specification.
-6. Create the model registry and decide how the selected 5e checkpoint will be
-   distributed.
-7. Add the end-to-end protocol and trial-log template before formal testing.
-8. Update this inventory whenever an artifact becomes ready, is superseded, or
-   is excluded.
+From the repository root:
+
+```bat
+python -B computer_vision\tests\integration\test_multi_cue_review_score.py
+python -B computer_vision\tests\integration\test_review_score_event_logging.py
+git diff --check
+git status --short
+```
+
+Inspect the staged file list before committing. A clean documentation commit
+must not contain model files, archives, private media, external repositories,
+session logs, or cache directories.

@@ -19,7 +19,8 @@ integrated CPU-based prototype containing:
 - L2CS-based coarse gaze estimation;
 - reliability and event-eligibility logic;
 - duration-based event management and logging; and
-- asynchronous latest-frame YOLO inference.
+- asynchronous latest-frame YOLO inference; and
+- externally configured Experimental Visual-Cue Review Score logging.
 
 The environment specification was exported on 13 August 2026 from the working
 Windows development environment. It does not contain a local Conda prefix,
@@ -135,10 +136,13 @@ contain model weights. The following external files must be placed according to
 
 - the selected YOLO checkpoint, checkpoint ID `5e`
   (`original_5e_best.pt`); and
-- the L2CS gaze checkpoint (`L2CSNet_gaze360.pkl`).
+- the L2CS gaze checkpoint (`L2CSNet_gaze360.pkl`); and
+- the MediaPipe Face Landmarker task (`face_landmarker.task`).
 
-Model binaries must not be committed as ordinary Git files. Their approved
-distribution method will be documented separately.
+The external L2CS-Net source checkout is also required. Model assets and source
+placement, integrity values, and the approved project handover channel are
+documented in [`../models/README.md`](../models/README.md). Model binaries must
+not be committed as ordinary Git files.
 
 ## Reproducibility Status
 

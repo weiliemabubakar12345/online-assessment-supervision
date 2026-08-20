@@ -39,6 +39,7 @@ datasets/
 **/raw_media/
 **/raw_videos/
 **/webcam_captures/
+**/private_media/
 
 # Model binaries and checkpoint folders
 *.pt
@@ -48,6 +49,7 @@ datasets/
 *.onnx
 *.engine
 *.tflite
+*.task
 models/checkpoints/
 models/weights/
 
@@ -87,6 +89,7 @@ temp/
 # Duplicated external repositories or third-party model code
 external_models/
 third_party/
+external/L2CS-Net/
 
 # Editor and operating-system files
 .vscode/

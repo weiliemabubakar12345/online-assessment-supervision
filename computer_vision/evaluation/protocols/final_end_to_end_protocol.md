@@ -493,7 +493,7 @@ Retain the following for each session:
 
 Raw identifiable webcam video must remain outside the shared repository.
 
-## 14. Execution Order for Week 8 Day 4
+## 14. Recommended Initial Smoke Subset
 
 If time is limited, execute this minimum smoke subset after the protocol and log
 template are frozen:
@@ -506,7 +506,8 @@ template are frozen:
    suitable over-ear headphone/headset is unavailable.
 
 Do not rush through the remaining formal scenarios merely to increase the
-number completed. Full execution and analysis may continue on Week 8 Day 5.
+number completed. Record partial execution explicitly and continue the formal
+protocol in a later session using the same frozen configuration.
 
 ## 15. Protocol Helper Conformance
 

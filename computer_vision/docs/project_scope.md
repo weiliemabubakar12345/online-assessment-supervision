@@ -19,7 +19,9 @@ The main objective is to develop a reliability-aware webcam pipeline that can:
 - reject or suppress unreliable gaze evidence;
 - combine the three perception modules through consistent frame-level interfaces;
 - convert sustained eligible cues into structured events; and
-- preserve timestamps, durations, confidence information, reliability states, and concurrent-cue context for subsequent human review and research analysis.
+- preserve timestamps, durations, confidence information, reliability states, and concurrent-cue context for subsequent human review and research analysis; and
+- provide an interpretable Experimental Visual-Cue Review Score for prioritising
+  intervals without treating the score as a probability or verdict.
 
 ## 3. Computer Vision Architecture
 
@@ -42,9 +44,12 @@ flowchart TD
     E --> F
     F --> G["Event Manager: START–ACTIVE–END"]
     G --> H["Event Logger: JSONL, CSV, session summary"]
+    G --> I["Experimental Visual-Cue Review Score"]
+    I --> H
 ```
 
-The Event Manager and Event Logger are integration components rather than additional perception modules.
+The Event Manager, Event Logger, and review-score module are integration
+components rather than additional perception modules.
 
 ## 4. Scope of the Three Perception Modules
 
@@ -117,6 +122,12 @@ Cross-module validation is used where one module can provide relevant supporting
 
 The runtime uses asynchronous latest-frame object detection so that slower YOLO inference does not block the head-pose, gaze, event-management, logging, and interface pipeline.
 
+The Experimental Visual-Cue Review Score operates only on currently active,
+temporally confirmed cues. It combines configured cue weights, confidence and
+duration factors, and a cross-domain concurrency bonus. It preserves a full
+per-cue breakdown for audit and must not be presented as a calibrated
+probability of misconduct.
+
 ## 6. Evaluation Scope
 
 The project uses several complementary evaluation protocols:
@@ -152,7 +163,7 @@ The intended users are the internship supervisor, collaborating researcher, futu
 The following items are outside this Computer Vision scope:
 
 - making a definitive cheating judgement;
-- automated disciplinary action or cheating-risk scoring;
+- automated disciplinary action or calibrated cheating-probability scoring;
 - identity recognition or long-term biometric identification;
 - emotion-based conclusions about suspicious behaviour;
 - precise point-of-gaze or screen-coordinate tracking;
@@ -177,7 +188,12 @@ The repository is intended to contain organized, shareable, and reproducible pro
 - outdated or duplicate checkpoints; and
 - third-party model files that are not intended for redistribution.
 
-Where a model or dataset cannot be included, its source, version, mapping, and access instructions should be documented. The selected final YOLO checkpoint may be included after verification because it is a small project-generated artifact. The third-party L2CS checkpoint should be obtained from its documented official source.
+Where a model or dataset cannot be included, its source, version, mapping, and
+access instructions should be documented. Ordinary Git tracking of `.pt`,
+`.pkl`, and `.task` model assets is prohibited by the module `.gitignore`.
+Required frozen assets are distributed through the approved project handover
+channel and verified using the filenames, sizes, and SHA-256 values recorded in
+[`../models/README.md`](../models/README.md).
 
 ## 10. Responsible-Use Boundary
 
@@ -187,14 +203,27 @@ The system therefore supports transparent review through confidence values, time
 
 ## 11. Current Scope Status
 
-As of Week 8 of the internship:
+As of the combined-branch audit on 20 August 2026:
 
-- the three perception modules have been implemented and evaluated separately;
-- the selected object-detection direction is the OIV7-based YOLOv8s model trained on OIV7-Anchor Dataset V3;
-- `original_5e_best.pt` is the selected global integration checkpoint, with a base detector confidence of `0.25`, input size of `640`, and IoU threshold of `0.45`;
-- the integration-facing object labels are standardized by an adapter, including `laptop` to `computer_device`;
-- the head/gaze adapter, YOLO adapter, Event Manager, Event Logger, cross-module validation, and asynchronous latest-frame runtime have been implemented and tested;
-- the conservative audio-device event rule uses an eligibility confidence of `0.43`, a minimum duration of `0.75 s`, a release grace of `0.60 s`, and a cooldown of `0.50 s`; and
-- the main remaining experiment is the structured end-to-end event evaluation, followed by final failure analysis, documentation, reproducibility checks, and handover preparation.
+- the three perception modules and frozen integration runtime are implemented;
+- `original_5e_best.pt` remains the selected global integration checkpoint;
+- adapters, reliability checks, cross-module validation, asynchronous YOLO,
+  temporal event management, audit logging, and configurable review scoring are
+  represented in the combined branch;
+- the external score configuration and two dependency-light synthetic tests
+  are tracked;
+- environment, model-access, integrity, runtime, evaluation-protocol, and
+  handover guidance are tracked; and
+- the final presentation has been completed, while repository consolidation and
+  final evidence handover remain in progress.
 
-This file defines the project boundary and current high-level architecture. Detailed numerical results, experiment procedures, implementation parameters, and known failure cases should be maintained in the relevant methodology, experiment, results, configuration, and limitations documents.
+The audited archive includes the final protocol and a blank 90-trial template,
+but it does not include the filled master log, reviewed result tables, final
+limitations summary, or final architecture source files. Their absence from
+the archive must not be interpreted as evidence that the corresponding work
+was not performed. Add only reviewed and anonymized canonical artifacts.
+
+This file defines the project boundary and current high-level architecture.
+Detailed numerical results, experiment procedures, implementation parameters,
+and known failure cases belong in the relevant methodology, evaluation,
+results, configuration, and limitations documents.

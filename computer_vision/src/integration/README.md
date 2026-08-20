@@ -1,9 +1,10 @@
-# Computer Vision Integration Runtime (Updated 17 August 2026)
+# Computer Vision Integration Runtime
 
 This directory contains the frozen computer-vision integration baseline for the
 online assessment monitoring prototype. It combines reliability-aware head pose
 and coarse gaze estimation, YOLO object-cue detection, temporal event
-management, configurable multi-cue review scoring, and structured audit logs.
+management, a configurable Experimental Visual-Cue Review Score, and structured
+audit logs.
 
 The runtime reports visual cues for later human review. Its review score is an
 experimental prioritisation indicator, not a calibrated probability of
@@ -106,6 +107,55 @@ the repository root:
 python -B computer_vision\src\integration\run_integrated_demo.py
 ```
 
+## First-Run Calibration
+
+The runtime performs a guided four-step calibration before live monitoring
+begins. Use the same normal seated position that will be maintained during the
+session.
+
+Before calibration:
+
+- keep only one participant clearly visible;
+- place the camera in a stable, approximately eye-level position;
+- keep the full face visible and reasonably centred;
+- avoid sitting too close to or too far from the camera;
+- use sufficient, even lighting and avoid strong backlighting; and
+- do not move the camera after calibration.
+
+Follow the centre-screen `+` target:
+
+1. **Eye calibration**  
+   Face forward, look at the centre `+`, and keep both eyes naturally open.
+   Normal blinking is acceptable.
+
+2. **Gaze-centre calibration**  
+   Keep the head still and continue looking only at the centre `+`.
+   Do not look at the diagnostic side panel. This step is completed
+   automatically after enough stable samples are collected.
+
+3. **Neutral head-pose calibration**  
+   Face the centre `+` directly. Keep the head upright, level, and still.
+   If the head moves too much, sample collection may restart.
+
+4. **Confirm the neutral baseline**  
+   When the interface shows that the neutral baseline is ready, maintain the
+   same forward-facing position and press `C`. Do not press `C` before the
+   confirmation step is ready.
+
+Live monitoring begins when the calibration state becomes `READY`.
+
+Press `R` and repeat the complete calibration if:
+
+- the participant changes seating position;
+- the camera position or angle changes;
+- the initial baseline was confirmed in an incorrect position; or
+- the displayed head or gaze directions remain clearly incorrect.
+
+During monitoring, an approximately forward-facing head and reliable open-eye
+evidence are required for an independent gaze-deviation event. Head turns may
+still produce head-pose events and can suppress an unreliable separate gaze
+event.
+
 No developer-specific absolute path is required. The frozen runtime settings
 are:
 
@@ -145,19 +195,32 @@ python -B computer_vision\src\integration\run_integrated_demo.py --help
 Do not save developer-specific absolute paths in committed code or
 documentation.
 
-## Review Score
+## Experimental Visual-Cue Review Score
 
-For each currently active and temporally confirmed cue:
-
-```text
-cue contribution = cue weight x confidence factor x duration factor
-```
-
-The current score is:
+For each currently active and temporally confirmed cue `i`:
 
 ```text
-review score = min(1.0, sum of cue contributions + concurrency bonus)
+C_i = W_i x F_confidence,i x F_duration,i
+F_duration,i = F_floor + (1 - F_floor) x min(T_i / T_reference, 1)
 ```
+
+The current score at time `t` is:
+
+```text
+S_t = min(1, sum(C_i) + B(D))
+```
+
+| Symbol | Meaning |
+| --- | --- |
+| `C_i` | Contribution of active cue `i` |
+| `W_i` | Configured weight of cue `i` |
+| `F_confidence,i` | Confidence factor derived for cue `i` |
+| `F_duration,i` | Duration factor for cue `i`, capped at `1` |
+| `F_floor` | Minimum duration factor; v1.1 uses `0.80` |
+| `T_i` | Current confirmed duration of cue `i`, in seconds |
+| `T_reference` | Duration at which the factor reaches its cap; v1.1 uses `5 s` |
+| `B(D)` | Configured concurrency bonus based on the number of active cue domains `D` |
+| `S_t` | Current review score at time `t`, clipped to `0.00-1.00` |
 
 Important scoring behaviour:
 
@@ -178,8 +241,10 @@ The default levels are loaded from the JSON configuration:
 | `>= 0.75` | `VERY_HIGH` |
 
 These values are research configuration parameters, not statistical evidence of
-misconduct. Review any flagged interval together with its underlying cues,
-timestamps, reliability fields, and source recording.
+misconduct. The retained `multi_cue` module and configuration filenames are
+implementation identifiers kept for compatibility. Review any flagged interval
+together with its underlying cues, timestamps, reliability fields, and source
+recording.
 
 ## Window Modes and Controls
 

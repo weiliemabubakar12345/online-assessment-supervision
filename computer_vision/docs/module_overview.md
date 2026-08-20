@@ -10,7 +10,10 @@ The component contains three perception modules:
 2. **Head-pose estimation**; and
 3. **Eye-Gaze Estimation**.
 
-Adapters, cross-module validation, event management, and event logging combine these perception outputs into structured review cues. They are integration components rather than additional perception modules.
+Adapters, cross-module validation, event management, configurable review
+scoring, and event logging combine these perception outputs into structured
+review cues. They are integration components rather than additional perception
+modules.
 
 ## 2. High-Level Organization
 
@@ -24,7 +27,8 @@ Adapters, cross-module validation, event management, and event logging combine t
 | Adaptation | Head/gaze adapter | Expose calibrated head, gaze, and eligibility information |
 | Validation | Cross-module rules | Suppress contradictory or unreliable candidate cues |
 | Temporal logic | Event Manager | Convert sustained eligible cues into `START`-`ACTIVE`-`END` events |
-| Output | Event Logger | Store candidate, completed-event, and session-summary records |
+| Review support | Experimental Visual-Cue Review Score | Summarise active confirmed cues with an auditable heuristic score |
+| Output | Event Logger | Store candidate, event, review-score, and session-summary records |
 | Presentation | Live interface | Display the latest diagnostic state without determining user intent |
 
 ## 3. End-to-End Data Flow
@@ -41,6 +45,8 @@ flowchart TD
     G --> H["Eligible frame-level candidates"]
     H --> I["Event Manager"]
     I --> J["Event Logger"]
+    I --> L["Experimental Visual-Cue Review Score"]
+    L --> J
     G --> K["Live diagnostic display"]
 ```
 
@@ -177,7 +183,8 @@ Implemented examples include:
 - suppressing a YOLO `NO_PERSON` candidate when the head/gaze pipeline still provides valid face evidence;
 - separating head events from gaze events that represent the same overall movement;
 - preventing unreliable gaze states from triggering independent gaze events; and
-- retaining simultaneous cues as context instead of combining them into an automatic cheating score.
+- retaining simultaneous cues as context and, separately, exposing them to an
+  auditable heuristic review score rather than an automatic cheating verdict.
 
 Cross-module rules are intentionally limited to cases where the available evidence supports a clear relationship. They do not infer motivation or intent.
 
@@ -215,21 +222,57 @@ The finalized conservative `audio_device` event rule currently uses:
 - release grace: `0.60 s`; and
 - cooldown: `0.50 s`.
 
-## 9. Event Logger and Outputs
+## 9. Experimental Visual-Cue Review Score
+
+The review-score module processes only currently observed, temporally confirmed
+cues. For cue `i`, its contribution is:
+
+```text
+C_i = W_i x F_confidence,i x F_duration,i
+```
+
+The configured duration factor is:
+
+```text
+F_duration,i = F_floor + (1 - F_floor) x min(T_i / T_reference, 1)
+```
+
+and the current score is:
+
+```text
+S_t = min(1, sum(C_i) + B(D))
+```
+
+where `W_i` is the cue weight, `F_confidence,i` is its confidence factor,
+`T_i` is the cue's current confirmed duration, `T_reference` is the duration at
+which the duration factor reaches its cap, `F_floor` is the minimum duration
+factor, and `B(D)` is the configured bonus for the number of concurrently
+active cue domains. The v1.1 configuration uses `F_floor = 0.80` and
+`T_reference = 5 s`.
+
+Duplicate detections of the same cue contribute once. Release-grace, stale,
+filtered, and completed cues do not contribute. The current score and session
+peak are recorded separately. The score is an experimental prioritisation aid,
+not a calibrated probability of cheating.
+
+## 10. Event Logger and Outputs
 
 The Event Logger preserves traceable records for later evaluation and review. Depending on the run configuration, its outputs include:
 
 - filtered frame-level candidates in `filtered_candidates.jsonl`;
+- lifecycle records in `events.jsonl`;
 - completed events in `completed_events.csv`;
+- per-frame review-score breakdowns in `review_scores.jsonl`;
 - timestamps and event durations;
 - occurrence counts;
 - confidence and sample statistics where applicable;
 - concurrent cues from the other modules; and
-- a session-level summary in `session_summary.json`.
+- a session-level summary in `session_summary.json`, including review-level
+  sample counts and session peak score where scoring is enabled.
 
 The logger records observations and events rather than an automatic cheating verdict.
 
-## 10. Module Interface Summary
+## 11. Module Interface Summary
 
 | Producer | Main output | Primary consumer |
 |---|---|---|
@@ -240,9 +283,11 @@ The logger records observations and events rather than an automatic cheating ver
 | Head/gaze adapter | Diagnostic outputs and event-eligibility fields | Cross-module validation and Event Manager |
 | Cross-module validation | Eligible and suppressed candidates with context | Event Manager and live display |
 | Event Manager | Event lifecycle updates and completed events | Event Logger |
-| Event Logger | JSONL, CSV, and session-summary artifacts | Evaluation, review, reporting, and handover |
+| Event Manager | Currently observed confirmed cues | Experimental Visual-Cue Review Score |
+| Review-score module | Current score, per-cue breakdown, level, and session peak | Event Logger and live display |
+| Event Logger | JSONL, CSV, review-score, and session-summary artifacts | Evaluation, review, reporting, and handover |
 
-## 11. Current Status
+## 12. Current Status
 
 Implemented and tested:
 
@@ -252,14 +297,16 @@ Implemented and tested:
 - cross-module `NO_PERSON` validation;
 - asynchronous latest-frame YOLO inference;
 - temporal event management; and
-- structured event logging.
+- structured event logging;
+- externally configured Experimental Visual-Cue Review Score v1.1; and
+- synthetic score and logger-compatibility checks.
 
-Still in progress:
+Handover items not present in the archive audited on 20 August 2026:
 
-- structured end-to-end event evaluation;
-- final event-level failure analysis;
-- reproducibility and environment verification;
-- final result consolidation; and
-- GitHub and project handover preparation.
+- the filled formal trial log and reviewed final result tables;
+- the final consolidated limitations document;
+- final architecture source/export files; and
+- confirmation of the exact approved L2CS-Net commit and clean-machine smoke
+  test.
 
 Detailed algorithms, experiments, numerical results, and limitations are maintained in their respective methodology, experiment, results, and limitations documents.
