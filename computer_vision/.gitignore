@@ -1,0 +1,96 @@
+# This file is scoped to the computer_vision module.
+
+# Python cache and test artefacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Jupyter temporary files
+.ipynb_checkpoints/
+
+# Local Python and Conda environments
+.venv/
+venv/
+env/
+conda-env/
+*.egg-info/
+
+# Secrets and machine-specific configuration
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+configs/local/
+configs/*local*.yaml
+configs/*local*.yml
+
+# Raw and processed datasets
+data/
+datasets/
+
+# Identifiable or unreviewed webcam media
+**/recordings/
+**/raw_media/
+**/raw_videos/
+**/webcam_captures/
+
+# Model binaries and checkpoint folders
+*.pt
+*.pth
+*.pkl
+*.ckpt
+*.onnx
+*.engine
+*.tflite
+models/checkpoints/
+models/weights/
+
+# Training runs and temporary experiment outputs
+runs/
+wandb/
+outputs/
+experiments/**/weights/
+
+# Keep reviewed results, but exclude raw or temporary result folders
+results/raw/
+results/tmp/
+results/temp/
+results/debug/
+results/**/raw/
+results/**/tmp/
+
+# Logs and temporary files
+logs/
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+~$*
+tmp/
+temp/
+
+# Downloaded archives
+*.zip
+*.rar
+*.7z
+*.tar
+*.tar.gz
+*.tgz
+
+# Duplicated external repositories or third-party model code
+external_models/
+third_party/
+
+# Editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+Desktop.ini
