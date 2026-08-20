@@ -87,12 +87,12 @@ For reproducibility, record the source revision used by the frozen runtime:
 git -C computer_vision\external\L2CS-Net rev-parse HEAD
 ```
 
-The exact approved commit SHA has not yet been added to this registry. Capture
-it from the checkout used for the final evaluation, confirm that a clean clone
-at that revision runs successfully, and then update the
-[Reproducibility Status](#reproducibility-status) table. Until that is done, a
-fresh clone follows the upstream default branch and is not a fully pinned
-dependency.
+The frozen runtime used the official Ahmednull/L2CS-Net source revision
+`a4d8f7fa5436a2b2b9f088471623b552a85811bd`. At verification time, the local
+checkout's `HEAD`, `origin/main`, and `origin/HEAD` all pointed to this commit,
+and `git status --short` showed no tracked source-code modifications. Untracked
+local verification artifacts are outside this source revision and must not be
+committed as upstream L2CS-Net code.
 
 ## Verify the Installation
 
@@ -176,7 +176,7 @@ must not be described as a validated general monitor detector.
 | Upstream source | [Ahmednull/L2CS-Net](https://github.com/Ahmednull/L2CS-Net) |
 | Source-code license | MIT |
 | Source location | `computer_vision/external/L2CS-Net/` |
-| Approved source revision | Pending capture from the final frozen checkout |
+| Approved source revision | `a4d8f7fa5436a2b2b9f088471623b552a85811bd` |
 | Model file | `L2CSNet_gaze360.pkl` |
 | Model distribution | Project shared Google Drive |
 | Runtime role | Coarse gaze-angle estimation |
@@ -258,8 +258,9 @@ still test their access before final handover.
 | Required runtime assets in Drive | Filenames and byte sizes verified on 13 August 2026 |
 | Full model SHA-256 checksums | Verified on 13 August 2026 |
 | Intended-recipient Drive access | Pending confirmation |
-| L2CS-Net source repository | Official upstream recorded |
-| Exact L2CS-Net source commit SHA | Pending capture and clean-clone verification |
+| L2CS-Net source repository | Official Ahmednull/L2CS-Net upstream verified |
+| Exact L2CS-Net source commit SHA | Verified as `a4d8f7fa5436a2b2b9f088471623b552a85811bd` on 20 August 2026 |
+| Clean-clone L2CS-Net smoke test at the recorded revision | Pending |
 | Model-weight redistribution review | Required before wider publication |
 
 ## Update Policy

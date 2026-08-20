@@ -10,6 +10,7 @@ evidence.
 | --- | --- |
 | `protocols/final_end_to_end_protocol.md` | Frozen 30-scenario, 90-trial end-to-end procedure |
 | `templates/end_to_end_trial_log.csv` | Blank trial-recording template |
+| `scripts/05_structured_integration_evaluation_protocol.py` | Interactive timing, prompting, resume, and trial-log helper |
 
 The template contains planned rows and is not a result file. Preserve it as a
 reusable template; place the reviewed filled master log under `results/` with a
@@ -21,6 +22,8 @@ different filename.
 evaluation/
 ├── protocols/
 │   └── final_end_to_end_protocol.md
+├── scripts/
+│   └── 05_structured_integration_evaluation_protocol.py
 ├── templates/
 │   └── end_to_end_trial_log.csv
 └── results/
@@ -33,10 +36,31 @@ The audited combined-branch archive dated 20 August 2026 does not contain the
 three `results/` files shown above. Add them only from the reviewed canonical
 evaluation records; do not infer or copy final metrics from the blank template.
 
-The protocol also describes the expected conformance of
-`05_structured_integration_evaluation_protocol.py`, but that helper is not in
-the audited archive. If it is part of the reproducibility handover, review it,
-remove machine-specific paths, and place it under `evaluation/scripts/`.
+## Run the Evaluation Helper
+
+Start and calibrate the frozen integration runtime in one terminal. When its
+calibration state is `READY`, open a second terminal at the repository root and
+run the helper. For example, to execute the Core block:
+
+```bat
+python -B computer_vision\evaluation\scripts\05_structured_integration_evaluation_protocol.py ^
+  --trial-log computer_vision\evaluation\templates\end_to_end_trial_log.csv ^
+  --output computer_vision\results\raw\evaluation\working_end_to_end_trial_log.csv ^
+  --block core ^
+  --session-id <integration_session_id> ^
+  --participant-id P01 ^
+  --runtime-config-reference "5e async frozen baseline"
+```
+
+Use `--block reliability` or `--block known-failure` for the remaining formal
+blocks. To continue an existing working log without overwriting completed rows,
+repeat the same command with `--resume`.
+
+The helper records wall-clock cue boundaries but does not automatically score
+model results or calculate latency from unaligned runtime timestamps. Keep the
+working log under `computer_vision/results/raw/` so it is excluded from ordinary
+Git tracking. Copy only the reviewed, anonymized final evidence into the
+recommended `evaluation/results/` layout.
 
 ## Minimum Result Documentation
 

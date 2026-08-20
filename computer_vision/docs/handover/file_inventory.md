@@ -68,14 +68,16 @@ Project-facing documentation uses **Experimental Visual-Cue Review Score**.
 | --- | --- | --- |
 | `computer_vision/evaluation/README.md` | Tracked | Evaluation folder guide and evidence-status boundary |
 | `computer_vision/evaluation/protocols/final_end_to_end_protocol.md` | Tracked | Frozen 30-scenario, 90-trial protocol |
+| `computer_vision/evaluation/scripts/05_structured_integration_evaluation_protocol.py` | Tracked | Interactive timing, prompting, resume, and trial-log helper |
 | `computer_vision/evaluation/templates/end_to_end_trial_log.csv` | Tracked | Blank formal trial-log template; not completed results |
 | `computer_vision/tests/integration/test_multi_cue_review_score.py` | Tracked | Synthetic score/configuration checks |
 | `computer_vision/tests/integration/test_review_score_event_logging.py` | Tracked | Logger compatibility and score-audit persistence checks |
 
 Both synthetic test scripts passed during the 20 August 2026 archive audit.
-All integration and test Python files also passed `py_compile` syntax checking.
-This does not replace a clean-machine webcam smoke test with the required model
-assets.
+The evaluation helper passed syntax checking and matched all 30 scenarios and
+90 template rows. All integration and test Python files also passed
+`py_compile` syntax checking. This does not replace a clean-machine webcam
+smoke test with the required model assets.
 
 ## 3. Required External Runtime Items
 
@@ -87,7 +89,7 @@ project Git tracking:
 | `computer_vision/models/yolo/original_5e_best.pt` | External | Project shared Drive; verify size and SHA-256 in `models/README.md` |
 | `computer_vision/models/l2cs/L2CSNet_gaze360.pkl` | External | Project shared Drive; verify size and SHA-256 |
 | `computer_vision/models/mediapipe/face_landmarker.task` | External | Project shared Drive; verify size and SHA-256 |
-| `computer_vision/external/L2CS-Net/` | External | Clone from official upstream source; record the approved commit SHA |
+| `computer_vision/external/L2CS-Net/` | External | Clone official upstream revision `a4d8f7fa5436a2b2b9f088471623b552a85811bd` |
 
 Optional 15e, 30e, and 50e YOLO comparison checkpoints are documented in the
 model registry and should be distributed only when comparison reproduction is
@@ -104,7 +106,6 @@ template.
 | `computer_vision/evaluation/results/final_end_to_end_trial_log.csv` | Not present | Add the reviewed, filled formal master log after removing private paths or identifiers |
 | `computer_vision/evaluation/results/final_end_to_end_summary.csv` | Not present | Add scenario-level outcomes with denominator and metric definitions |
 | `computer_vision/evaluation/results/README.md` | Not present | Explain evaluation date, hardware, frozen configuration, result files, and interpretation |
-| `computer_vision/evaluation/scripts/05_structured_integration_evaluation_protocol.py` | Not present | Add the reviewed helper if it is required to reproduce protocol timing and trial prompts |
 | `computer_vision/docs/limitations.md` | Not present | Consolidate fragmentation, multi-cue sensitivity, identity ambiguity, pose/gaze limits, and object-class limits |
 | `computer_vision/docs/architecture/` | Not present | Add the reviewed final architecture source and a shareable export if available |
 | `computer_vision/docs/methodology/` | Not present | Add the final research-method description if it is part of the handover scope |
@@ -117,7 +118,8 @@ duplicating it inside the runtime source directory.
 ## 5. Verification Still Pending
 
 - Confirm intended-recipient access to the shared model folder.
-- Record and test the exact approved L2CS-Net commit SHA.
+- Test a clean clone at the recorded L2CS-Net revision
+  `a4d8f7fa5436a2b2b9f088471623b552a85811bd`.
 - Recreate the Conda environment from `teep_integration.yml` on a clean machine.
 - Run both synthetic tests and a full webcam startup/calibration/quit smoke test
   using the documented repository-relative asset layout.
