@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Exam Cheating-Detection Prototype</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, Segoe UI, Arial, sans-serif;
+    margin: 0;
+    color: #1a1a1a;
+    background: #f4f5f7;
+  }
+  .wrap {
+    display: grid;
+    grid-template-columns: 1fr 420px;
+    gap: 16px;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 16px;
+  }
+  @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: #666; font-size: 13px; margin: 0 0 16px; }
+  .card {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .q { margin-bottom: 20px; }
+  .q p { font-weight: 600; margin: 0 0 8px; }
+  .q label { display: block; padding: 4px 0; cursor: pointer; }
+  .q input[type=text] {
+    width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;
+  }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  button {
+    font: inherit; padding: 8px 14px; border: 1px solid #888;
+    background: #fff; border-radius: 6px; cursor: pointer;
+  }
+  button.primary { background: #2b6cb0; color: #fff; border-color: #2b6cb0; }
+  button:hover { filter: brightness(0.97); }
+
+  /* Log panel */
+  #logPanel {
+    position: sticky; top: 16px;
+    max-height: calc(100vh - 32px);
+    display: flex; flex-direction: column;
+  }
+  #logHead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  #logHead h2 { font-size: 15px; margin: 0; }
+  #count { font-size: 12px; color: #666; }
+  #log {
+    flex: 1; overflow-y: auto; font-family: ui-monospace, Consolas, monospace;
+    font-size: 12px; line-height: 1.5; border: 1px solid #e0e0e0;
+    border-radius: 6px; padding: 8px; background: #0f1115; color: #d6deeb;
+  }
+  .entry { padding: 3px 0; border-bottom: 1px solid #1e2430; word-break: break-word; }
+  .entry .ts { color: #7f9cf5; }
+  .entry .type { font-weight: 700; }
+  .t-visibility .type, .t-blur .type { color: #f6ad55; }
+  .t-fullscreen .type { color: #f687b3; }
+  .t-copy .type, .t-paste .type { color: #68d391; }
+  .t-contextmenu .type { color: #fc8181; }
+  .t-mutation .type { color: #63b3ed; }
+  .t-keyboard .type { color: #b794f4; }
+  .t-mouseleave .type { color: #f6e05e; }
+  .t-system .type { color: #a0aec0; }
+  .status { font-size: 12px; color: #666; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <!-- ===== Exam column ===== -->
+  <div>
+    <div class="card">
+      <h1>Sample Online Exam</h1>
+      <p class="sub">Test harness for browser-based cheating-detection signals. Nothing is submitted anywhere.</p>
+
+      <div class="toolbar">
+        <button id="btnFullscreen">Enter Fullscreen</button>
+        <button id="btnInject">Simulate Extension Injection</button>
+        <button id="btnExport">Export Log (JSON)</button>
+        <button id="btnExportCsv">Export Log (CSV)</button>
+        <button id="btnClear">Clear Log</button>
+      </div>
+
+      <form id="examForm">
+        <div class="q">
+          <p>1. What does HTML stand for?</p>
+          <label><input type="radio" name="q1" value="a"> Hyperlink Text Management Language</label>
+          <label><input type="radio" name="q1" value="b"> HyperText Markup Language</label>
+          <label><input type="radio" name="q1" value="c"> High-Level Text Machine Layer</label>
+        </div>
+
+        <div class="q">
+          <p>2. Which company develops the Claude models?</p>
+          <label><input type="radio" name="q2" value="a"> Anthropic</label>
+          <label><input type="radio" name="q2" value="b"> OpenAI</label>
+          <label><input type="radio" name="q2" value="c"> DeepMind</label>
+        </div>
+
+        <div class="q">
+          <p>3. In one word, what event fires when a tab is backgrounded?</p>
+          <input type="text" name="q3" placeholder="Type your answer…" autocomplete="off">
+        </div>
+
+        <div class="q">
+          <p>4. Briefly: why is client-side cheating detection unreliable?</p>
+          <input type="text" name="q4" placeholder="Type your answer…" autocomplete="off">
+        </div>
+
+        <button type="submit" class="primary">Submit Exam</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== Log column ===== -->
+  <div id="logPanel">
+    <div id="logHead">
+      <h2>Detection Log</h2>
+      <span id="count">0 events</span>
+    </div>
+    <div id="log"></div>
+    <div class="status" id="fsStatus">Fullscreen: no</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // In-memory structured log: array of {type, detail, timestamp}
+  const events = [];
+  window.__examEvents = events; // exposed for console inspection
+
+  const logEl   = document.getElementById("log");
+  const countEl = document.getElementById("count");
+  const fsStatus= document.getElementById("fsStatus");
+
+  function nowISO() { return new Date().toISOString(); }
+
+  function logEvent(type, detail) {
+    const timestamp = nowISO();
+    const record = { type, detail, timestamp };
+    events.push(record);
+
+    const row = document.createElement("div");
+    row.className = "entry t-" + type;
+    row.innerHTML =
+      '<span class="ts">' + timestamp.split("T")[1].replace("Z", "") + '</span> ' +
+      '<span class="type">[' + type.toUpperCase() + ']</span> ' +
+      escapeHtml(detail);
+    logEl.appendChild(row);
+    logEl.scrollTop = logEl.scrollHeight;
+
+    countEl.textContent = events.length + (events.length === 1 ? " event" : " events");
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => (
+      { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+    ));
+  }
+
+  logEvent("system", "Detector initialized. Ready.");
+
+  /* ---------- 1. Tab switch / backgrounded ---------- */
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "hidden") {
+      logEvent("visibility", "Tab hidden / backgrounded (switched away or minimized).");
+    } else {
+      logEvent("visibility", "Tab visible again (returned to exam tab).");
+    }
+  });
+
+  /* ---------- 2. Window focus lost / regained ---------- */
+  window.addEventListener("blur", function () {
+    logEvent("blur", "Window lost focus (clicked another window/app).");
+  });
+  window.addEventListener("focus", function () {
+    logEvent("blur", "Window regained focus.");
+  });
+
+  /* ---------- 3. Fullscreen exit ---------- */
+  function updateFsStatus() {
+    const fs = !!document.fullscreenElement;
+    fsStatus.textContent = "Fullscreen: " + (fs ? "yes" : "no");
+    return fs;
+  }
+  document.addEventListener("fullscreenchange", function () {
+    if (updateFsStatus()) {
+      logEvent("fullscreen", "Entered fullscreen mode.");
+    } else {
+      logEvent("fullscreen", "Exited fullscreen mode.");
+    }
+  });
+  document.getElementById("btnFullscreen").addEventListener("click", function () {
+    const el = document.documentElement;
+    if (el.requestFullscreen) {
+      el.requestFullscreen().catch(err =>
+        logEvent("system", "Fullscreen request failed: " + err.message));
+    } else {
+      logEvent("system", "Fullscreen API not supported in this browser.");
+    }
+  });
+
+  /* ---------- 4. Copy / paste ---------- */
+  document.addEventListener("copy", function () {
+    const sel = (window.getSelection() || "").toString();
+    logEvent("copy", "Copy event" + (sel ? ' — selected text: "' +
+      sel.slice(0, 60) + (sel.length > 60 ? "…" : "") + '"' : "."));
+  });
+  document.addEventListener("paste", function (e) {
+    let pasted = "";
+    try { pasted = (e.clipboardData || window.clipboardData).getData("text"); } catch (_) {}
+    logEvent("paste", "Paste event" + (pasted ? ' — pasted text: "' +
+      pasted.slice(0, 60) + (pasted.length > 60 ? "…" : "") + '"' : "."));
+  });
+
+  /* ---------- 5. Right-click / context menu ---------- */
+  document.addEventListener("contextmenu", function (e) {
+    const tag = e.target && e.target.tagName ? e.target.tagName.toLowerCase() : "unknown";
+    logEvent("contextmenu", "Context menu (right-click) opened on <" + tag + ">.");
+  });
+
+  /* ---------- 5b. Keyboard shortcuts ---------- */
+  // Watch for shortcuts commonly used to copy, screenshot, print, save, or
+  // open dev tools during an exam.
+  document.addEventListener("keydown", function (e) {
+    const k = (e.key || "").toLowerCase();
+    const mod = e.ctrlKey || e.metaKey; // Ctrl (Win/Linux) or Cmd (Mac)
+    let hit = null;
+
+    if (k === "printscreen")                 hit = "PrintScreen (screenshot)";
+    else if (mod && k === "c")               hit = (e.metaKey ? "Cmd" : "Ctrl") + "+C (copy)";
+    else if (mod && k === "v")               hit = (e.metaKey ? "Cmd" : "Ctrl") + "+V (paste)";
+    else if (mod && k === "x")               hit = (e.metaKey ? "Cmd" : "Ctrl") + "+X (cut)";
+    else if (mod && k === "p")               hit = (e.metaKey ? "Cmd" : "Ctrl") + "+P (print)";
+    else if (mod && k === "s")               hit = (e.metaKey ? "Cmd" : "Ctrl") + "+S (save page)";
+    else if (mod && e.shiftKey && k === "i") hit = "Ctrl+Shift+I (dev tools)";
+    else if (mod && e.shiftKey && k === "s") hit = "Ctrl+Shift+S (screenshot tool)";
+    else if (k === "f12")                    hit = "F12 (dev tools)";
+    else if (mod && k === "t")               hit = (e.metaKey ? "Cmd" : "Ctrl") + "+T (new tab)";
+
+    if (hit) logEvent("keyboard", "Shortcut pressed: " + hit + ".");
+  });
+
+  /* ---------- 5c. Mouse leaving the viewport ---------- */
+  // Cursor exiting the top of the window often means reaching for another tab,
+  // the address bar, or a second monitor.
+  document.addEventListener("mouseout", function (e) {
+    // relatedTarget === null when the pointer leaves the document entirely.
+    if (!e.relatedTarget && !e.toElement) {
+      const dir = e.clientY <= 0 ? "top (toward tabs/address bar)"
+        : e.clientY >= window.innerHeight ? "bottom"
+        : e.clientX <= 0 ? "left" : "right";
+      logEvent("mouseleave", "Cursor left the viewport via the " + dir + ".");
+    }
+  });
+
+  /* ---------- 6. DOM extension-artifact detection ---------- */
+  // Common substrings seen in IDs/classes injected by browser extensions.
+  const EXT_PATTERNS = [
+    "translate", "deepl", "grammarly", "grammar", "gtx-trans",
+    "lingvanex", "reverso", "quillbot", "immersive-translate",
+    "google-translate", "goog-te"
+  ];
+
+  function describeEl(el) {
+    const tag = el.tagName ? el.tagName.toLowerCase() : "?";
+    const id  = el.id ? "#" + el.id : "";
+    const cls = (typeof el.className === "string" && el.className)
+      ? "." + el.className.trim().split(/\s+/).join(".") : "";
+    return "<" + tag + ">" + id + cls;
+  }
+
+  function matchesExtension(el) {
+    if (!el || el.nodeType !== 1) return null;
+    const id  = (el.id || "").toLowerCase();
+    const cls = (typeof el.className === "string" ? el.className : "").toLowerCase();
+    const hay = id + " " + cls;
+    for (const p of EXT_PATTERNS) {
+      if (hay.indexOf(p) !== -1) return p;
+    }
+    return null;
+  }
+
+  const observer = new MutationObserver(function (mutations) {
+    for (const m of mutations) {
+      for (const node of m.addedNodes) {
+        if (node.nodeType !== 1) continue;
+        // Check the node itself…
+        const selfMatch = matchesExtension(node);
+        if (selfMatch) {
+          logEvent("mutation", 'Possible extension artifact injected (matched "' +
+            selfMatch + '"): ' + describeEl(node));
+        }
+        // …and any matching descendants (extensions often inject subtrees).
+        if (node.querySelectorAll) {
+          node.querySelectorAll("*").forEach(function (child) {
+            const cm = matchesExtension(child);
+            if (cm) {
+              logEvent("mutation", 'Possible extension artifact (descendant, matched "' +
+                cm + '"): ' + describeEl(child));
+            }
+          });
+        }
+      }
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+
+  /* ---------- Test helper: simulate an extension injection ---------- */
+  document.getElementById("btnInject").addEventListener("click", function () {
+    const fake = document.createElement("div");
+    fake.id = "grammarly-extension-root";
+    fake.className = "gr_-ify translate-widget";
+    fake.style.cssText = "position:fixed;bottom:8px;right:8px;padding:4px 8px;" +
+      "background:#222;color:#0f0;font:11px monospace;border-radius:4px;z-index:9999;";
+    fake.textContent = "fake ext";
+    document.body.appendChild(fake);
+    logEvent("system", "Injected fake extension node for testing (MutationObserver should fire above).");
+    setTimeout(function () { if (fake.parentNode) fake.parentNode.removeChild(fake); }, 2500);
+  });
+
+  /* ---------- Exam submit ---------- */
+  document.getElementById("examForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    logEvent("system", "Exam submitted (simulated — no data leaves the page). Total events: " + events.length);
+  });
+
+  /* ---------- Export / clear ---------- */
+  document.getElementById("btnExport").addEventListener("click", function () {
+    const blob = new Blob([JSON.stringify(events, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "exam-detection-log.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+  document.getElementById("btnExportCsv").addEventListener("click", function () {
+    const esc = v => '"' + String(v).replace(/"/g, '""') + '"';
+    const rows = [["timestamp", "type", "detail"].join(",")];
+    events.forEach(function (ev) {
+      rows.push([esc(ev.timestamp), esc(ev.type), esc(ev.detail)].join(","));
+    });
+    const blob = new Blob([rows.join("\r\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "exam-detection-log.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+  document.getElementById("btnClear").addEventListener("click", function () {
+    events.length = 0;
+    logEl.innerHTML = "";
+    countEl.textContent = "0 events";
+    logEvent("system", "Log cleared.");
+  });
+
+  updateFsStatus();
+})();
+</script>
+</body>
+</html>

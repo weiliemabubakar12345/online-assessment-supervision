@@ -30,12 +30,23 @@ teep-kaggle-bundle/
 ├── configs/
 │   └── multi_cue_review_score_v1_1.json    # from computer_vision/configs/
 ├── resources/
-│   └── mediapipe_expanded_subset_14.csv    # from computer_vision/resources/mediapipe/
-└── models/
-    ├── yolo/original_5e_best.pt
-    ├── l2cs/L2CSNet_gaze360.pkl
-    └── mediapipe/face_landmarker.task
+│   └── mediapipe/
+│       └── mediapipe_expanded_subset_14.csv    # from computer_vision/resources/mediapipe/
+└── models/                                 # flat — no yolo/l2cs/mediapipe subfolders
+    ├── original_5e_best.pt
+    ├── L2CSNet_gaze360.pkl
+    └── face_landmarker.task
 ```
+
+Note: Kaggle's newer "Add Input" flow may mount the dataset at
+`/kaggle/input/datasets/<your-username>/<slug>/` instead of the older
+`/kaggle/input/<slug>/` — if the notebook's dataset-check cell reports
+everything under `integration/`/`configs/` as found but the three files
+under `models/`/`resources/` as missing, that usually means the top-level
+`DATASET_DIR` prefix is already correct and only those subpaths are
+wrong (check the actual layout with `os.walk` and adjust the notebook's
+`CV_*` env vars in the "start services" cell to match, rather than
+re-uploading the dataset).
 
 - `integration/`, `configs/`, `resources/` are copied straight from this
   repo's `computer_vision/` folder as-is (read-only source, nothing to
