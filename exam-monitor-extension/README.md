@@ -13,6 +13,10 @@ bisa dilihat JavaScript di dalam halaman karena sandbox browser:
 - **Webcam periodik** — frame webcam dikirim ke pipeline computer-vision
   (`computer_vision/`, lihat [Integrasi Computer Vision](#integrasi-computer-vision-review-score)
   di bawah) untuk *review score* lintas-cue (head pose, gaze, objek).
+- **Extension lain yang terinstall & aktif** di browser (via `chrome.management`
+  / `browser.management`) — mis. tahu ada extension AI-assistant/translator/
+  quiz-answer yang enabled, walau tidak tahu apakah sedang dipakai persis saat
+  itu. Lihat [Batasan penting](#batasan-penting-tulis-di-paper).
 
 Tidak lagi hanya lokal — screenshot dan frame webcam diteruskan server ke
 layanan analisis eksternal (VLM / CV). Untuk riset/pengujian.
@@ -41,6 +45,9 @@ blok `background` menjadi `"service_worker": "background.js"` (lihat bawah).
 3. Klik ikon extension di toolbar untuk membuka **popup log**.
 4. **Izinkan akses situs**: buka `about:addons` → extension ini → **Permissions**
    → aktifkan *Access your data for all websites* (dibutuhkan `captureVisibleTab`).
+5. Browser akan menampilkan prompt izin untuk **"Manage your apps, extensions,
+   and themes"** (permission `management`, dipakai untuk mendeteksi extension
+   lain yang terinstall) — ini normal, bukan bug.
 
 > Catatan Firefox:
 > - Temporary Add-on **hilang saat browser ditutup** — muat ulang tiap sesi uji.
@@ -144,6 +151,11 @@ dan `05_multi_cue_review_score.py`). Dashboard menampilkannya sebagai
 - **visibility / blur / copy / paste / contextmenu / keyboard / mouseleave /
   mutation** — lakukan di halaman ujian (`#examForm` harus ada agar content
   script aktif).
+- **extensions** — enable/disable extension lain apa saja (mis. dark mode
+  toggle) lewat `chrome://extensions` / `about:addons`, lalu tunggu sampai
+  alarm heartbeat berikutnya (≤30-60 detik) — event baru muncul hanya kalau
+  daftar extension aktifnya *berubah* dari check sebelumnya (dedup, bukan
+  spam tiap heartbeat).
 
 ## Batasan penting (tulis di paper)
 
@@ -159,6 +171,14 @@ dan `05_multi_cue_review_score.py`). Dashboard menampilkannya sebagai
 - **Privasi.** Prototype ini menyimpan screenshot semua tab yang diaktifkan ke
   `chrome.storage.local`. Untuk sistem nyata: batasi kapan capture dilakukan,
   minta consent, dan kirim/olah di server tepercaya — jangan simpan di klien.
+- **Deteksi extension lain hanya tahu "terinstall & enabled", bukan "sedang
+  dipakai".** Permission `management` cuma kasih tahu extension apa yang
+  ada dan aktif di browser itu, bukan aktivitas real-time-nya. Siswa bisa
+  disable dulu sebelum ujian lalu enable lagi setelahnya (walau itu sendiri
+  masih jadi sinyal kalau dicek berkala). Permission ini juga **tidak
+  tersembunyi** — browser menampilkan warning eksplisit ke user saat
+  install/update ("Manage your apps, extensions, and themes"), dan tidak
+  terlihat sama sekali kalau siswa pakai profile/browser lain.
 - **Privasi webcam.** Capture webcam periodik (untuk CV review score) adalah
   perubahan data-handling yang jauh lebih invasif dibanding screenshot tab —
   video wajah siswa dikirim ke layanan pihak ketiga (Kaggle + tunnel). Prompt

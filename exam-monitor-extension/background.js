@@ -75,8 +75,50 @@ function ensureHeartbeatAlarm() {
   api.alarms.create("heartbeat", { periodInMinutes: 0.5 });
 }
 api.alarms.onAlarm.addListener(function (a) {
-  if (a.name === "heartbeat") sendHeartbeat();
+  if (a.name === "heartbeat") {
+    sendHeartbeat();
+    checkInstalledExtensions();
+  }
 });
+
+/* ---- Other installed/enabled extensions (needs the "management" permission) ----
+   Tells the proctor WHICH other extensions the student has installed and
+   enabled (e.g. an AI-assistant sidebar, a translator, a quiz-answer tool) —
+   not whether they're actively being used right now, just installed+enabled.
+   Reuses the heartbeat alarm so it's rechecked periodically (a student could
+   disable something before the exam and re-enable it after), but only logs
+   an event when the active set actually changes, to avoid spamming the log
+   with an identical list every 30s. */
+let lastExtensionsSignature = null;
+
+async function checkInstalledExtensions() {
+  if (!api.management || !api.management.getAll) return; // unsupported in this browser
+  try {
+    const self = await api.management.getSelf();
+    const all = await api.management.getAll();
+    const active = all
+      .filter(function (e) { return e.type === "extension" && e.enabled && e.id !== self.id; })
+      .map(function (e) { return e.name; })
+      .sort();
+
+    const signature = active.join("|");
+    if (signature === lastExtensionsSignature) return; // no change since last check
+    lastExtensionsSignature = signature;
+
+    await addEvent("extensions",
+      active.length
+        ? active.length + " other extension(s) active: " + active.join(", ")
+        : "No other extensions active.",
+      { extensions: active });
+  } catch (e) {
+    // Most likely the "management" permission wasn't granted (older install,
+    // or the user declined it) — log once rather than retrying every alarm tick.
+    if (lastExtensionsSignature === null) {
+      lastExtensionsSignature = "__error__";
+      addEvent("system", "Extension list check failed: " + e.message);
+    }
+  }
+}
 
 /* ---- In-page signals forwarded from the exam tab (content.js) ---- */
 api.runtime.onMessage.addListener(function (msg) {
@@ -149,12 +191,14 @@ async function captureAndLog(windowId, reason) {
 api.runtime.onInstalled.addListener(function () {
   ensureHeartbeatAlarm();
   sendHeartbeat();
+  checkInstalledExtensions();
   addEvent("system", "Exam monitor installed / updated.");
 });
 if (api.runtime.onStartup) {
   api.runtime.onStartup.addListener(function () {
     ensureHeartbeatAlarm();
     sendHeartbeat();
+    checkInstalledExtensions();
   });
 }
 ensureHeartbeatAlarm(); // also arm on background wake

@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "Exam Screen-Side Monitor (Prototype)",
   "version": "0.1.0",
-  "description": "Research prototype: captures browser cheating-detection signals, the URL/title of the tab a student switches to, a tab screenshot, and periodic webcam frames. Sends events to a local proctor server, which forwards screenshots/webcam frames to remote analysis services (VLM / computer-vision review score) over the network — not local-only.",
-  "permissions": ["tabs", "idle", "storage", "alarms"],
+  "description": "Research prototype: captures browser cheating-detection signals, the URL/title of the tab a student switches to, a tab screenshot, periodic webcam frames, and the list of other extensions installed and enabled in the browser. Sends events to a local proctor server, which forwards screenshots/webcam frames to remote analysis services (VLM / computer-vision review score) over the network — not local-only.",
+  "permissions": ["tabs", "idle", "storage", "alarms", "management"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "scripts": ["background.js"]

@@ -37,6 +37,7 @@
   .t-mutation .type { color: #4fd1c5; }
   .t-screenshot .type { color: #f687b3; }
   .t-webcam .type { color: #7fd; }
+  .t-extensions .type { color: #f6ad55; }
   .t-idle .type { color: #ed8936; }
   .t-system .type { color: #8895a7; }
   .thumb { display: block; margin-top: 5px; max-width: 320px; border: 1px solid #37414f; border-radius: 4px; }
@@ -67,8 +68,13 @@
 
 <script>
   var ONLINE_MS = 90000; // heartbeat: ~30s Chrome / 60s Firefox min — allow slack
+  // Matched against ev.url + ev.detail (lowercased) — also catches extension
+  // NAMES in "extensions" events (e.g. detail "...active: ChatGPT for Chrome"
+  // matches "chatgpt" below), not just URLs, since both flow through the same
+  // isSuspect() check.
   var SUSPECT = ["chatgpt", "openai", "claude.ai", "gemini", "bard", "google.com/search",
-                 "bing.com/search", "quillbot", "translate", "whatsapp", "telegram", "discord"];
+                 "bing.com/search", "quillbot", "translate", "whatsapp", "telegram", "discord",
+                 "grammarly", "chegg", "coursehero", "quizlet", "answer", "solver"];
   // Extension-side trigger threshold for the CV pipeline's review_score
   // (mirrors server.js's CV_FLAG_THRESHOLD, which is what actually computes
   // ev.cvFlag — kept here only for display, e.g. the "reached at" hint).
