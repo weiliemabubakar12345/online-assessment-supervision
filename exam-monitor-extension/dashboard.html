@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Proctor Dashboard</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, Segoe UI, Arial, sans-serif;
+         background: #0f1115; color: #d6deeb; height: 100vh; display: flex; flex-direction: column; }
+  header { padding: 12px 16px; border-bottom: 1px solid #1e2430; display: flex;
+           align-items: center; justify-content: space-between; }
+  header h1 { font-size: 16px; margin: 0; }
+  header .meta { font-size: 12px; color: #8895a7; }
+  .main { flex: 1; display: flex; min-height: 0; }
+  .sidebar { width: 260px; border-right: 1px solid #1e2430; overflow-y: auto; }
+  .stu { padding: 10px 14px; border-bottom: 1px solid #1a2029; cursor: pointer; display: flex;
+         align-items: center; gap: 8px; }
+  .stu:hover { background: #171c24; }
+  .stu.sel { background: #1d2530; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .on  { background: #48bb78; box-shadow: 0 0 6px #48bb78; }
+  .off { background: #f56565; }
+  .stu .id { font-size: 13px; font-weight: 600; }
+  .stu .sub { font-size: 11px; color: #8895a7; }
+  .content { flex: 1; overflow-y: auto; padding: 8px 16px 24px; }
+  .placeholder { color: #8895a7; padding: 40px; text-align: center; }
+  .entry { padding: 5px 0; border-bottom: 1px solid #1a2029; font-family: ui-monospace, Consolas, monospace;
+           font-size: 12px; word-break: break-word; }
+  .entry .ts { color: #7f9cf5; }
+  .entry .type { font-weight: 700; }
+  .t-visibility .type, .t-blur .type, .t-focus .type { color: #f6ad55; }
+  .t-tab-switch .type, .t-navigation .type { color: #63b3ed; }
+  .t-copy .type, .t-paste .type { color: #68d391; }
+  .t-contextmenu .type { color: #fc8181; }
+  .t-keyboard .type { color: #b794f4; }
+  .t-mouseleave .type { color: #f6e05e; }
+  .t-mutation .type { color: #4fd1c5; }
+  .t-screenshot .type { color: #f687b3; }
+  .t-idle .type { color: #ed8936; }
+  .t-system .type { color: #8895a7; }
+  .thumb { display: block; margin-top: 5px; max-width: 320px; border: 1px solid #37414f; border-radius: 4px; }
+  .flag { color: #fc8181; font-weight: 700; }
+  .vlm { margin-top: 5px; padding: 6px 8px; background: #131a24; border-left: 3px solid #63b3ed;
+         border-radius: 4px; font-size: 12px; color: #cbd5e1; }
+  .vlm-cat { display: inline-block; padding: 1px 6px; border-radius: 3px; background: #234; color: #7fd; font-weight: 700; }
+  .vlm-wait { color: #f6ad55; }
+  .vlm-err { color: #fc8181; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Proctor Dashboard</h1>
+    <span class="meta" id="meta">connecting…</span>
+  </header>
+  <div class="main">
+    <div class="sidebar" id="sidebar"></div>
+    <div class="content" id="content">
+      <div class="placeholder">Select a student to view their activity log.</div>
+    </div>
+  </div>
+
+<script>
+  var ONLINE_MS = 90000; // heartbeat: ~30s Chrome / 60s Firefox min — allow slack
+  var SUSPECT = ["chatgpt", "openai", "claude.ai", "gemini", "bard", "google.com/search",
+                 "bing.com/search", "quillbot", "translate", "whatsapp", "telegram", "discord"];
+  var selected = null;
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function timeOnly(iso) {
+    var p = (iso || "").split("T")[1];
+    return p ? p.replace("Z", "") : (iso || "");
+  }
+  function isSuspect(ev) {
+    var hay = ((ev.url || "") + " " + (ev.detail || "")).toLowerCase();
+    return SUSPECT.some(function (k) { return hay.indexOf(k) !== -1; });
+  }
+
+  async function refreshStudents() {
+    var list;
+    try {
+      list = await (await fetch("/students")).json();
+    } catch (e) {
+      document.getElementById("meta").textContent = "server unreachable";
+      return;
+    }
+    var now = Date.now();
+    document.getElementById("meta").textContent =
+      list.length + " student(s) • updated " + timeOnly(new Date().toISOString());
+
+    list.sort(function (a, b) { return b.lastSeen - a.lastSeen; });
+    var sb = document.getElementById("sidebar");
+    sb.innerHTML = "";
+    list.forEach(function (s) {
+      var online = (now - s.lastSeen) < ONLINE_MS;
+      var div = document.createElement("div");
+      div.className = "stu" + (s.studentId === selected ? " sel" : "");
+      div.innerHTML =
+        '<span class="dot ' + (online ? "on" : "off") + '"></span>' +
+        '<div><div class="id">' + esc(s.studentId) + '</div>' +
+        '<div class="sub">' + s.eventCount + ' events • ' +
+          (online ? "online" : "OFFLINE (extension disabled?)") + '</div></div>';
+      div.addEventListener("click", function () { selected = s.studentId; refreshEvents(); refreshStudents(); });
+      sb.appendChild(div);
+    });
+  }
+
+  async function refreshEvents() {
+    if (!selected) return;
+    var evs;
+    try {
+      evs = await (await fetch("/events?studentId=" + encodeURIComponent(selected))).json();
+    } catch (e) { return; }
+
+    var c = document.getElementById("content");
+    c.innerHTML = "";
+    if (!evs.length) { c.innerHTML = '<div class="placeholder">No events yet.</div>'; return; }
+
+    evs.slice().reverse().forEach(function (ev) {
+      var row = document.createElement("div");
+      row.className = "entry t-" + ev.type;
+      var suspect = isSuspect(ev) ? ' <span class="flag">⚠ SUSPECT</span>' : "";
+      row.innerHTML =
+        '<span class="ts">' + timeOnly(ev.timestamp) + '</span> ' +
+        '<span class="type">[' + ev.type.toUpperCase() + ']</span> ' +
+        esc(ev.detail || "") + suspect;
+      if (ev.image) {
+        var img = document.createElement("img");
+        img.src = ev.image; img.className = "thumb";
+        row.appendChild(img);
+      }
+      if (ev.vlm) {
+        var v = document.createElement("div");
+        v.className = "vlm";
+        if (ev.vlm.error) {
+          v.innerHTML = '🤖 <span class="vlm-err">VLM: ' + esc(ev.vlm.error) + '</span>';
+        } else if (ev.vlm.status === "analyzing") {
+          v.innerHTML = '🤖 <span class="vlm-wait">VLM analyzing…</span>';
+        } else {
+          v.innerHTML = '🤖 <span class="vlm-cat">' + esc(ev.vlm.category || "?") + '</span> ' +
+            '<b>' + esc(ev.vlm.identity || "") + '</b> — ' + esc(ev.vlm.summary || "");
+        }
+        row.appendChild(v);
+      }
+      c.appendChild(row);
+    });
+  }
+
+  refreshStudents();
+  setInterval(refreshStudents, 2000);
+  setInterval(refreshEvents, 2000);
+</script>
+</body>
+</html>

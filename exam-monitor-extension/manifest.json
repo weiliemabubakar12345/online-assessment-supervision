@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Exam Screen-Side Monitor (Prototype)",
+  "version": "0.1.0",
+  "description": "Research prototype: captures browser cheating-detection signals, the URL/title of the tab a student switches to, and a screenshot. Local only, no server.",
+  "permissions": ["tabs", "idle", "storage", "alarms"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Exam Monitor Log"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "exam-monitor@prototype",
+      "strict_min_version": "115.0"
+    }
+  }
+}
