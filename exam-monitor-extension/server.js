@@ -11,6 +11,7 @@
 //   GET  /                                         -> dashboard.html
 //
 // VLM_URL=https://xxxx.trycloudflare.com node server.js   (override the VLM endpoint)
+// CV_URL=https://xxxx.trycloudflare.com node server.js    (override the CV review-score endpoint)
 
 const http = require("http");
 const url = require("url");
@@ -22,6 +23,16 @@ const MAX_EVENTS_PER_STUDENT = 500;
 // VLM endpoint. Local by default; set VLM_URL to the Colab tunnel URL when the
 // VLM runs on Colab, e.g.  VLM_URL=https://xxxx.trycloudflare.com node server.js
 const VLM_URL = process.env.VLM_URL || "http://localhost:8788";
+// CV review-score endpoint (cv_service.py). Local by default; set CV_URL to the
+// Kaggle tunnel URL when the CV pipeline runs on Kaggle — see
+// exam-monitor-extension/kaggle/README.md, e.g.
+// CV_URL=https://xxxx.trycloudflare.com node server.js
+const CV_URL = process.env.CV_URL || "http://localhost:8789";
+// Extension-side trigger threshold for a webcam-derived review_score. This is
+// NOT one of cv_service.py's own review_level tiers (MODERATE/HIGH/VERY_HIGH
+// at 0.25/0.50/0.75) — it's an ad-hoc cutoff (inside the HIGH tier) that the
+// dashboard ORs together with the existing keyword-based rule filter.
+const CV_FLAG_THRESHOLD = 0.6;
 
 // studentId -> { lastSeen: ms, events: [] }
 const students = Object.create(null);
@@ -40,6 +51,27 @@ async function analyzeWithVLM(event) {
   } catch (e) {
     console.error("VLM analyze error:", e);   // <-- tambahin ini
     event.vlm = { error: "VLM service unreachable: " + e.message };
+  }
+}
+
+// Ask the CV service for a review_score/review_level reading on a webcam
+// frame; attach the result (and the derived flag) to the event object in
+// place, same fire-and-forget pattern as analyzeWithVLM above.
+async function analyzeWithCV(event, studentId) {
+  event.cv = { status: "analyzing" };
+  try {
+    const r = await fetch(CV_URL + "/frame", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ studentId: studentId, image: event.image, timestamp: Date.now() })
+    });
+    const result = await r.json();
+    event.cv = result;
+    event.cvFlag = typeof result.review_score === "number" && result.review_score >= CV_FLAG_THRESHOLD;
+  } catch (e) {
+    console.error("CV analyze error:", e);
+    event.cv = { error: "CV service unreachable: " + e.message };
+    event.cvFlag = false;
   }
 }
 
@@ -87,6 +119,11 @@ const server = http.createServer(async function (req, res) {
       // Screenshot -> run the VLM (async; result attaches to the event later).
       if (body.event.type === "screenshot" && body.event.image) {
         analyzeWithVLM(body.event);
+      }
+      // Webcam frame -> run the CV review-score pipeline (async; result
+      // attaches to the event later, same pattern as the VLM branch above).
+      if (body.event.type === "webcam" && body.event.image) {
+        analyzeWithCV(body.event, body.studentId || "unknown");
       }
     }
     s.lastSeen = Date.now();

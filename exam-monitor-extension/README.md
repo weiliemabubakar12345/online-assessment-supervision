@@ -10,19 +10,25 @@ bisa dilihat JavaScript di dalam halaman karena sandbox browser:
 - **Fokus seluruh browser** (pindah ke aplikasi lain).
 - **Idle / layar terkunci**.
 - **Screenshot** tab yang sedang aktif saat pindah tab.
+- **Webcam periodik** — frame webcam dikirim ke pipeline computer-vision
+  (`computer_vision/`, lihat [Integrasi Computer Vision](#integrasi-computer-vision-review-score)
+  di bawah) untuk *review score* lintas-cue (head pose, gaze, objek).
 
-Hanya lokal. Belum ada server. Untuk riset/pengujian.
+Tidak lagi hanya lokal — screenshot dan frame webcam diteruskan server ke
+layanan analisis eksternal (VLM / CV). Untuk riset/pengujian.
 
 ## File
 
 | File | Peran |
 |---|---|
 | `manifest.json` | Konfigurasi MV3 + permission |
-| `content.js` | Berjalan di halaman ujian, tangkap event in-page, kirim ke service worker |
+| `content.js` | Berjalan di halaman ujian, tangkap event in-page + capture webcam periodik, kirim ke service worker |
 | `background.js` | Service worker: log pusat + sinyal lintas-tab + screenshot + kirim ke server + heartbeat |
 | `popup.html` / `popup.js` | Panel log live siswa + tombol Export JSON / Clear |
-| `server.js` | Server proctor (Node.js murni, tanpa dependency) — terima event + heartbeat |
+| `server.js` | Server proctor (Node.js murni, tanpa dependency) — terima event + heartbeat, relay ke VLM/CV |
 | `dashboard.html` | Dashboard proctor — lihat semua siswa & log-nya live, status online/offline |
+| `vlm_service.py` | Layanan Flask lokal — analisis screenshot pakai VLM (Qwen2.5-VL) |
+| `cv_service.py` | Layanan Flask headless — bungkus pipeline `computer_vision/` (head/gaze + YOLO + event scoring) jadi HTTP API, dirancang untuk jalan di Kaggle GPU. Lihat [`kaggle/README.md`](kaggle/README.md). |
 
 Extension ini lintas-browser (memakai alias `browser`/`chrome`). Manifest saat
 ini disetel untuk **Firefox/Zen** (`background.scripts`). Untuk Chrome/Edge, ganti
@@ -80,10 +86,46 @@ content.js ─▶ background.js ─POST /events─▶ server.js ─▶ dashboard
 
 Dashboard menampilkan:
 - Daftar siswa dengan **titik hijau/merah** (online / OFFLINE = extension mati).
-- Log per siswa + **thumbnail screenshot**.
-- Tanda **⚠ SUSPECT** otomatis kalau URL/detail mengandung kata kunci terlarang
-  (chatgpt, google search, whatsapp, dll — ubah daftar `SUSPECT` di
-  `dashboard.html`).
+- Log per siswa + **thumbnail screenshot/webcam**.
+- Tanda **⚠ SUSPECT** kalau salah satu dari dua sumber berikut terpenuhi (OR,
+  bukan AND — satu sumber saja cukup):
+  - **Rule-based (keyword)**: URL/detail mengandung kata kunci terlarang
+    (chatgpt, google search, whatsapp, dll — ubah daftar `SUSPECT` di
+    `dashboard.html`).
+  - **CV review score**: `review_score` dari `cv_service.py` mencapai
+    `CV_FLAG_THRESHOLD` (default `0.6`, di `server.js`) — dipicu **terlepas**
+    dari hasil rule-based di atas.
+
+## Integrasi Computer Vision (review score)
+
+```
+content.js ─▶ background.js ─POST /events (type:"webcam")─▶ server.js
+                                                                │
+                                                    POST /frame ▼
+                                              cv_service.py (lokal atau via
+                                              tunnel Kaggle, lihat kaggle/README.md)
+                                                                │
+                                          {review_score, review_level, ...}
+                                                                ▼
+                                             event.cv + event.cvFlag ─▶ dashboard.html
+```
+
+`cv_service.py` membungkus modul `computer_vision/src/integration/`
+(`01_head_gaze_adapter.py`, `02_yolo_output_adapter.py`, `03_event_manager.py`,
+`05_multi_cue_review_score.py`) — **tidak mengubah file-file itu**, hanya
+mengimpornya. Jalankan lokal (`python cv_service.py`, default port `8789`)
+atau di Kaggle (lihat [`kaggle/README.md`](kaggle/README.md) untuk GPU
+gratis + tunnel `cloudflared`), lalu arahkan `server.js`:
+
+```
+CV_URL=https://xxxx.trycloudflare.com node server.js
+```
+
+**Penting**: `review_score` adalah indikator prioritisasi eksperimental dari
+modul CV — **bukan** probabilitas cheating yang terkalibrasi, dan bukan
+vonis otomatis (lihat disclaimer di `computer_vision/src/integration/README.md`
+dan `05_multi_cue_review_score.py`). Dashboard menampilkannya sebagai
+"review score" / "review level", bukan "cheating probability".
 
 > **Heartbeat**: extension ping server tiap 30 detik. Kalau ping berhenti (siswa
 > menonaktifkan extension), titik siswa berubah **merah** dalam ~40 detik. Inilah
@@ -117,3 +159,10 @@ Dashboard menampilkan:
 - **Privasi.** Prototype ini menyimpan screenshot semua tab yang diaktifkan ke
   `chrome.storage.local`. Untuk sistem nyata: batasi kapan capture dilakukan,
   minta consent, dan kirim/olah di server tepercaya — jangan simpan di klien.
+- **Privasi webcam.** Capture webcam periodik (untuk CV review score) adalah
+  perubahan data-handling yang jauh lebih invasif dibanding screenshot tab —
+  video wajah siswa dikirim ke layanan pihak ketiga (Kaggle + tunnel). Prompt
+  izin kamera bawaan browser **tidak cukup** sebagai informed consent untuk
+  proctoring nyata; sebelum dipakai di luar prototipe, perlu ditinjau
+  pembimbing riset/etik, dan idealnya ada notice on-page yang eksplisit
+  (bukan cuma popup izin OS/browser yang senyap).

@@ -82,6 +82,11 @@ api.alarms.onAlarm.addListener(function (a) {
 api.runtime.onMessage.addListener(function (msg) {
   if (msg && msg.kind === "event") {
     addEvent(msg.type, msg.detail, { source: msg.source });
+  } else if (msg && msg.kind === "webcam-frame") {
+    // Periodic webcam frame from content.js; forwarded via the same
+    // addEvent()/postToServer() pipeline. The server routes event.type ===
+    // "webcam" to the CV review-score service (see server.js).
+    addEvent("webcam", "Webcam frame captured.", { source: msg.source, image: msg.image });
   }
 });
 

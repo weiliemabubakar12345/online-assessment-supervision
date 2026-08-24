@@ -36,6 +36,7 @@
   .t-mouseleave .type { color: #f6e05e; }
   .t-mutation .type { color: #4fd1c5; }
   .t-screenshot .type { color: #f687b3; }
+  .t-webcam .type { color: #7fd; }
   .t-idle .type { color: #ed8936; }
   .t-system .type { color: #8895a7; }
   .thumb { display: block; margin-top: 5px; max-width: 320px; border: 1px solid #37414f; border-radius: 4px; }
@@ -45,6 +46,11 @@
   .vlm-cat { display: inline-block; padding: 1px 6px; border-radius: 3px; background: #234; color: #7fd; font-weight: 700; }
   .vlm-wait { color: #f6ad55; }
   .vlm-err { color: #fc8181; }
+  .cv { margin-top: 5px; padding: 6px 8px; background: #131a24; border-left: 3px solid #7fd39a;
+        border-radius: 4px; font-size: 12px; color: #cbd5e1; }
+  .cv-score { font-weight: 700; cursor: help; }
+  .cv-wait { color: #f6ad55; }
+  .cv-err { color: #fc8181; }
 </style>
 </head>
 <body>
@@ -63,6 +69,10 @@
   var ONLINE_MS = 90000; // heartbeat: ~30s Chrome / 60s Firefox min — allow slack
   var SUSPECT = ["chatgpt", "openai", "claude.ai", "gemini", "bard", "google.com/search",
                  "bing.com/search", "quillbot", "translate", "whatsapp", "telegram", "discord"];
+  // Extension-side trigger threshold for the CV pipeline's review_score
+  // (mirrors server.js's CV_FLAG_THRESHOLD, which is what actually computes
+  // ev.cvFlag — kept here only for display, e.g. the "reached at" hint).
+  var CV_FLAG_THRESHOLD = 0.6;
   var selected = null;
 
   function esc(s) {
@@ -122,7 +132,18 @@
     evs.slice().reverse().forEach(function (ev) {
       var row = document.createElement("div");
       row.className = "entry t-" + ev.type;
-      var suspect = isSuspect(ev) ? ' <span class="flag">⚠ SUSPECT</span>' : "";
+      // Rule-based keyword filter OR'd with the CV review-score threshold:
+      // either source alone is enough to flag, regardless of what the other
+      // one says. ev.cvFlag is computed server-side in server.js (the only
+      // side that can reach the CV service); isSuspect() stays local here.
+      var ruleFlagged = isSuspect(ev);
+      var cvFlagged = !!ev.cvFlag;
+      var suspect = "";
+      if (ruleFlagged || cvFlagged) {
+        var reason = (ruleFlagged && cvFlagged) ? "keyword + CV"
+          : ruleFlagged ? "keyword" : "CV review score";
+        suspect = ' <span class="flag">⚠ SUSPECT (' + reason + ')</span>';
+      }
       row.innerHTML =
         '<span class="ts">' + timeOnly(ev.timestamp) + '</span> ' +
         '<span class="type">[' + ev.type.toUpperCase() + ']</span> ' +
@@ -144,6 +165,26 @@
             '<b>' + esc(ev.vlm.identity || "") + '</b> — ' + esc(ev.vlm.summary || "");
         }
         row.appendChild(v);
+      }
+      if (ev.cv) {
+        var cv = document.createElement("div");
+        cv.className = "cv";
+        if (ev.cv.error) {
+          cv.innerHTML = '📹 <span class="cv-err">CV: ' + esc(ev.cv.error) + '</span>';
+        } else if (ev.cv.status === "analyzing") {
+          cv.innerHTML = '📹 <span class="cv-wait">CV analyzing…</span>';
+        } else {
+          // "review score", never "cheating probability" — the CV module's own
+          // docs are explicit this is an experimental prioritisation
+          // indicator, not a calibrated verdict; the disclaimer string is
+          // shown as a hover tooltip rather than inline on every row.
+          var scoreText = (typeof ev.cv.review_score === "number") ? ev.cv.review_score.toFixed(2) : "?";
+          cv.title = ev.cv.disclaimer || "";
+          cv.innerHTML = '📹 <span class="cv-score">review score ' + esc(scoreText) +
+            ' (' + esc(ev.cv.review_level || "?") + ')</span> ' +
+            '<span style="color:#8895a7">calibration: ' + esc(ev.cv.calibration_phase || "?") + '</span>';
+        }
+        row.appendChild(cv);
       }
       c.appendChild(row);
     });

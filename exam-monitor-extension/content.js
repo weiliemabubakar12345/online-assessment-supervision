@@ -29,6 +29,55 @@
 
   send("system", "Content script attached to exam page.");
 
+  /* Webcam capture: periodic frames forwarded for CV review-score analysis.
+     getUserMedia is a page-level Web API gated by the browser's own camera
+     permission prompt (not an extension permission — manifest.json needs no
+     change for this). Requires a secure context: load the exam page over
+     http://localhost:8787/exam, not a local file:// page, or the browser may
+     refuse the camera. One-shot: if permission is denied, log it once and do
+     not keep re-prompting. */
+  const WEBCAM_CAPTURE_INTERVAL_MS = 1000;
+  const WEBCAM_JPEG_QUALITY = 0.5;
+  const WEBCAM_CAPTURE_WIDTH = 320;
+  const WEBCAM_CAPTURE_HEIGHT = 240;
+
+  function sendWebcamFrame(dataUrl) {
+    try {
+      const p = api.runtime.sendMessage({ kind: "webcam-frame", image: dataUrl, source: location.href });
+      if (p && p.catch) p.catch(function () {});
+    } catch (e) {
+      // Background may be restarting; the frame is best-effort.
+    }
+  }
+
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    navigator.mediaDevices.getUserMedia({
+      video: { width: WEBCAM_CAPTURE_WIDTH, height: WEBCAM_CAPTURE_HEIGHT }
+    }).then(function (stream) {
+      const video = document.createElement("video");
+      video.srcObject = stream;
+      video.muted = true;
+      video.playsInline = true;
+      video.style.display = "none";
+      document.body.appendChild(video);
+      video.play();
+
+      const canvas = document.createElement("canvas");
+      canvas.width = WEBCAM_CAPTURE_WIDTH;
+      canvas.height = WEBCAM_CAPTURE_HEIGHT;
+      const ctx = canvas.getContext("2d");
+
+      send("system", "Webcam capture started.");
+      setInterval(function () {
+        if (video.readyState < 2) return; // not enough data yet
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        sendWebcamFrame(canvas.toDataURL("image/jpeg", WEBCAM_JPEG_QUALITY));
+      }, WEBCAM_CAPTURE_INTERVAL_MS);
+    }).catch(function (e) {
+      send("system", "Webcam permission denied or unavailable: " + e.message);
+    });
+  }
+
   /* Tab hidden / backgrounded */
   document.addEventListener("visibilitychange", function () {
     send("visibility", document.visibilityState === "hidden"
