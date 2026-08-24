@@ -45,7 +45,10 @@ from flask import Flask, request, jsonify
 
 EXT_DIR = Path(__file__).resolve().parent
 CV_ROOT = EXT_DIR.parent / "computer_vision"
-INTEGRATION_DIR = CV_ROOT / "src" / "integration"
+# Overridable because a Kaggle notebook lays the integration modules out flat
+# (from an attached Dataset) rather than in this repo's computer_vision/src/
+# integration/ layout.
+INTEGRATION_DIR = Path(os.environ.get("CV_INTEGRATION_DIR") or (CV_ROOT / "src" / "integration"))
 
 PORT = int(os.environ.get("CV_PORT", "8789"))
 IDLE_SESSION_TIMEOUT_S = float(os.environ.get("CV_IDLE_SESSION_TIMEOUT_S", "600"))
