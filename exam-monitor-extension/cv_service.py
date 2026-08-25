@@ -94,6 +94,22 @@ def _resolve_device() -> str:
         return "cpu"
 
 
+def _adapter_device_string(device: str) -> str:
+    """Normalize a device string for the adapters below.
+
+    01_head_gaze_adapter.py calls l2cs's own select_device(), an
+    older YOLOv5-vintage helper that only understands '', 'cpu', an index
+    ('0'), or a comma list ('0,1') -- NOT a bare 'cuda' with no index. Given
+    'cuda', that helper ends up doing `os.environ['CUDA_VISIBLE_DEVICES'] =
+    'cuda'` (a non-numeric value), which the CUDA driver then rejects with
+    "Invalid device id". A bare 'cuda' is normalized to '0' (first visible
+    GPU) here; an explicit index, 'cuda:0', or 'cpu' passes through
+    unchanged. Applied to both adapters' device config for consistency, even
+    though Ultralytics YOLO's own device parsing already tolerates 'cuda'.
+    """
+    return "0" if device.strip().lower() == "cuda" else device
+
+
 def _require_paths(*paths: Path) -> None:
     missing = [str(p) for p in paths if not p.exists()]
     if missing:
@@ -148,7 +164,7 @@ REVIEW_SCORE_CONFIG = review_module.load_review_score_config(REVIEW_CONFIG_PATH)
 # is safe across every student session and avoids reloading the checkpoint per student.
 print("cv_service: loading YOLO checkpoint...")
 _yolo_adapter = yolo_module.YoloOutputAdapter(
-    config=yolo_module.YoloAdapterConfig(checkpoint_id=YOLO_CHECKPOINT, device=DEVICE),
+    config=yolo_module.YoloAdapterConfig(checkpoint_id=YOLO_CHECKPOINT, device=_adapter_device_string(DEVICE)),
     model_dir=YOLO_MODEL_DIR,
 )
 _yolo_adapter.start()
@@ -173,7 +189,7 @@ class _Session:
             l2cs_snapshot=L2CS_SNAPSHOT,
             mediapipe_model=MEDIAPIPE_MODEL,
             canonical14_csv=CANONICAL14_CSV,
-            config=head_module.HeadGazeConfig(device=DEVICE, mirror_input=False),
+            config=head_module.HeadGazeConfig(device=_adapter_device_string(DEVICE), mirror_input=False),
         )
         self.head_adapter.start()
         self.event_manager = event_module.EventManager(
