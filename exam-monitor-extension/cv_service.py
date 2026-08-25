@@ -250,17 +250,36 @@ def _process_frame(session: _Session, frame: np.ndarray, timestamp: float) -> Di
     session.last_seen = time.time()
 
     return {
-        "review_score": review_output["score"],
+        # Explicit float(): 05_multi_cue_review_score.py may hand back a
+        # numpy scalar depending on how it computed the value internally, and
+        # jsonify() raises (uncaught, since this happens during response
+        # serialization *after* the route's own try/except already
+        # succeeded) if it hits one of those instead of a native float.
+        "review_score": float(review_output["score"]),
         "review_level": review_output["review_level"],
-        "session_peak_score": review_output["session_peak_score"],
-        "active_cues": review_output["active_cues"],
+        "session_peak_score": float(review_output["session_peak_score"]),
+        "active_cues": list(review_output["active_cues"]),
         "calibration_phase": calibration.get("phase"),
-        "frame_count": session.frame_count,
+        "frame_count": int(session.frame_count),
         "disclaimer": review_output["disclaimer"],
     }
 
 
 app = Flask(__name__)
+
+
+@app.errorhandler(Exception)
+def _handle_unexpected_error(e):
+    # Global safety net: ANY unhandled exception anywhere in a route (not
+    # just the ones explicitly try/except'd below) must still come back as
+    # JSON, never Flask/Werkzeug's default HTML error page -- server.js's
+    # analyzeWithCV() does response.json() and has no HTML fallback, so an
+    # HTML response there previously surfaced as an opaque "Unexpected
+    # token '<'" instead of the actual error.
+    import traceback
+    print("cv_service: unhandled exception:")
+    traceback.print_exc()
+    return jsonify({"error": "unhandled server error: " + str(e)}), 500
 
 
 @app.route("/health")
