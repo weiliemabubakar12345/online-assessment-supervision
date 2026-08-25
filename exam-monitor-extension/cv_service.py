@@ -79,6 +79,13 @@ def _load_local_module(path: Path, module_name: str) -> ModuleType:
 def _resolve_device() -> str:
     env_device = os.environ.get("CV_DEVICE")
     if env_device:
+        # An explicit CV_DEVICE=cuda is trusted at face value here, but NOT
+        # left unvalidated -- see the torch.cuda.is_available() check right
+        # after this function is called below. Without that check, a stale
+        # CUDA_VISIBLE_DEVICES or a pip install that clobbered the CUDA-linked
+        # torch build (e.g. an unpinned transitive dependency) only surfaces
+        # as a confusing failure deep inside the first /frame request
+        # ("Invalid CUDA 'device=0' requested") instead of a clear boot error.
         return env_device
     try:
         import torch
@@ -108,6 +115,28 @@ event_module = _load_local_module(INTEGRATION_DIR / "03_event_manager.py", "teep
 review_module = _load_local_module(INTEGRATION_DIR / "05_multi_cue_review_score.py", "teep_multi_cue_review_score")
 
 DEVICE = _resolve_device()
+
+if DEVICE == "cuda":
+    try:
+        import torch
+        cuda_ok = torch.cuda.is_available()
+    except Exception as e:
+        cuda_ok = False
+        print(f"cv_service: torch import/CUDA check failed: {e}")
+    if not cuda_ok:
+        print(
+            "cv_service: CV_DEVICE=cuda was requested but "
+            "torch.cuda.is_available() is False -- refusing to start with a "
+            "device that will fail on the first real request instead of here.\n"
+            "Common causes on Kaggle: GPU accelerator not enabled for this "
+            "session, or a pip install (e.g. an unpinned transitive "
+            "dependency) silently replaced the preinstalled CUDA-linked "
+            "torch build with a CPU-only one -- try restarting the kernel "
+            "and re-running the install cell with --no-deps where possible.\n"
+            "Set CV_DEVICE=cpu to run on CPU instead (slow) once you've "
+            "confirmed that's actually what you want."
+        )
+        sys.exit(1)
 
 _require_paths(L2CS_ROOT, L2CS_SNAPSHOT, MEDIAPIPE_MODEL, CANONICAL14_CSV, REVIEW_CONFIG_PATH)
 

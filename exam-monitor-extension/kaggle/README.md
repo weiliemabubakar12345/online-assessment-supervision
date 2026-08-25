@@ -71,11 +71,19 @@ install l2cs` does **not** pull in on its own, and it is *not* the same
 on PyPI (that's an unrelated package with the same name). Without it,
 `HeadGazeAdapter.start()` fails on every `/frame` request with
 `ModuleNotFoundError: No module named 'face_detection'`. Install the correct
-one explicitly:
+one explicitly, with `--no-deps`:
 ```bash
-pip install git+https://github.com/elliottzheng/face-detection.git@master
+pip install --no-deps git+https://github.com/elliottzheng/face-detection.git@master
 ```
-The notebook's dependency-install cell already includes this.
+The notebook's dependency-install cell already includes this. The `--no-deps`
+matters here specifically: this package's own `setup.py` pulls in an
+unpinned `torch`, which can silently replace Kaggle's preinstalled
+CUDA-linked `torch` build with a CPU-only one. If that happens, `cv_service.py`
+now fails fast at boot with a clear message (rather than deep inside the
+first `/frame` request) when `CV_DEVICE=cuda` is requested but
+`torch.cuda.is_available()` is `False`. The notebook also has a standalone
+GPU sanity-check cell right after the installs — if it fails, restart the
+kernel and re-run from the top before continuing.
 
 ## 2. Run the notebook
 
