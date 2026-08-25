@@ -62,6 +62,21 @@ notebook: **Add Input → your dataset** → lands at
 `/kaggle/input/teep-kaggle-bundle/...`. If your slug differs, change
 `DATASET_SLUG` in the notebook's dataset-check cell.
 
+### Known L2CS-Net dependency gotcha
+
+`l2cs/pipeline.py` (inside the cloned L2CS-Net source, step 3 below) does
+`from face_detection import RetinaFace` — a separate package that `pip
+install l2cs` does **not** pull in on its own, and it is *not* the same
+`face_detection` package you'd get from a plain `pip install face_detection`
+on PyPI (that's an unrelated package with the same name). Without it,
+`HeadGazeAdapter.start()` fails on every `/frame` request with
+`ModuleNotFoundError: No module named 'face_detection'`. Install the correct
+one explicitly:
+```bash
+pip install git+https://github.com/elliottzheng/face-detection.git@master
+```
+The notebook's dependency-install cell already includes this.
+
 ## 2. Run the notebook
 
 1. Upload `teep_proctoring_services.ipynb` to Kaggle (or open it there
