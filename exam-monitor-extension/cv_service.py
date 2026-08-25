@@ -173,9 +173,24 @@ _inference_lock = threading.Lock()
 def _get_or_create_session(student_id: str) -> _Session:
     with _sessions_lock:
         session = _sessions.get(student_id)
-        if session is None:
-            print(f"cv_service: starting session for studentId={student_id!r}")
-            session = _Session(student_id)
+        if session is not None:
+            return session
+
+    # Cold-starting a session calls HeadGazeAdapter.start(), which loads L2CS +
+    # MediaPipe onto the GPU. Serialize that against in-flight /frame inference
+    # through the same _inference_lock _process_frame uses below -- one Kaggle
+    # GPU, avoid a new session's model load racing an active inference call
+    # for CUDA memory (this raced uninstrumented before and could crash the
+    # request with an unhandled exception -- see the try/except in the routes
+    # that call this function).
+    with _inference_lock:
+        with _sessions_lock:
+            session = _sessions.get(student_id)
+            if session is not None:
+                return session  # created by another thread while we waited
+        print(f"cv_service: starting session for studentId={student_id!r}")
+        session = _Session(student_id)
+        with _sessions_lock:
             _sessions[student_id] = session
         return session
 
@@ -266,7 +281,11 @@ def session_start():
     student_id = str(data.get("studentId") or "").strip()
     if not student_id:
         return jsonify({"error": "missing 'studentId'"}), 400
-    session = _get_or_create_session(student_id)
+    try:
+        session = _get_or_create_session(student_id)
+    except Exception as e:
+        print(f"cv_service: /session/start error for studentId={student_id!r}: {e}")
+        return jsonify({"error": "session start failed: " + str(e)}), 500
     return jsonify({"ok": True, "calibration_phase": session.head_adapter.calibration_status().get("phase")})
 
 
@@ -289,7 +308,12 @@ def frame_route():
     # need monotonically increasing seconds, so epoch seconds works directly.
     ts = float(timestamp) / 1000.0 if isinstance(timestamp, (int, float)) else time.time()
 
-    session = _get_or_create_session(student_id)
+    try:
+        session = _get_or_create_session(student_id)
+    except Exception as e:
+        print(f"cv_service: /frame session-start error for studentId={student_id!r}: {e}")
+        return jsonify({"error": "session start failed: " + str(e)}), 500
+
     try:
         result = _process_frame(session, decoded_frame, ts)
     except Exception as e:
