@@ -13,6 +13,11 @@
   button { font: inherit; font-size: 12px; padding: 5px 10px; border: 1px solid #37414f;
            background: #1a1f27; color: #d6deeb; border-radius: 5px; cursor: pointer; }
   button:hover { background: #232a34; }
+  #forceRow { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+              padding: 8px 12px; border-bottom: 1px solid #1e2430; font-size: 12px; }
+  #forceRow .label { color: #d6deeb; }
+  #forceRow .hint { display: block; font-size: 10.5px; color: #8895a7; margin-top: 2px; }
+  #forceToggle.on { background: #1c3a2a; border-color: #2f7d4f; color: #7fd39a; }
   #log { max-height: 460px; overflow-y: auto; padding: 6px 12px 12px;
          font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
   .entry { padding: 4px 0; border-bottom: 1px solid #1a2029; word-break: break-word; }
@@ -37,6 +42,12 @@
   <div id="head">
     <strong>Detection Log</strong>
     <span id="count">0 events</span>
+  </div>
+  <div id="forceRow">
+    <span class="label">Force monitor this page
+      <span class="hint">for sites without #examForm — reloads the tab</span>
+    </span>
+    <button id="forceToggle">OFF</button>
   </div>
   <div id="controls">
     <button id="export">Export JSON</button>

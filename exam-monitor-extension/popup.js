@@ -67,3 +67,32 @@ document.getElementById("export").addEventListener("click", async function () {
 document.getElementById("clear").addEventListener("click", function () {
   api.storage.local.set({ events: [] });
 });
+
+/* Force-monitor toggle: content.js can't retroactively attach to an
+   already-loaded page, so flipping this reloads the active tab immediately
+   -- the next page load re-evaluates content.js's gate with the new value. */
+const forceToggleEl = document.getElementById("forceToggle");
+
+function renderForceToggle(on) {
+  forceToggleEl.textContent = on ? "ON" : "OFF";
+  forceToggleEl.classList.toggle("on", !!on);
+}
+
+async function loadForceToggle() {
+  const r = await api.storage.local.get("forceMonitor");
+  renderForceToggle(!!r.forceMonitor);
+}
+loadForceToggle();
+
+forceToggleEl.addEventListener("click", async function () {
+  const r = await api.storage.local.get("forceMonitor");
+  const next = !r.forceMonitor;
+  await api.storage.local.set({ forceMonitor: next });
+  renderForceToggle(next);
+  try {
+    const tabs = await api.tabs.query({ active: true, currentWindow: true });
+    if (tabs[0]) api.tabs.reload(tabs[0].id);
+  } catch (e) {
+    // Best-effort -- worst case the user reloads the tab manually.
+  }
+});

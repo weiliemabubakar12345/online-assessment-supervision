@@ -9,14 +9,20 @@
 // registering its OWN listeners — it does not (and cannot) read the exam page's
 // private `events` array, which lives in a closure the isolated world can't see.
 
-(function () {
+(async function () {
   "use strict";
 
   // Cross-browser: browser (Firefox/Zen) or chrome (Chrome).
   const api = (typeof browser !== "undefined") ? browser : chrome;
 
-  // Gate: only monitor the exam page. Change this marker to match your real exam.
-  if (!document.getElementById("examForm")) return;
+  // Gate: only monitor the exam page, UNLESS the popup's "Force monitor this
+  // page" toggle (storage.local.forceMonitor) is on -- needed for testing
+  // against real third-party test sites that don't have #examForm. This is a
+  // single global flag, not per-site: turn it on before loading the page you
+  // want monitored, off when done, same as any other extension toggle.
+  const hasExamMarker = !!document.getElementById("examForm");
+  const forced = !!(await api.storage.local.get("forceMonitor")).forceMonitor;
+  if (!hasExamMarker && !forced) return;
 
   function send(type, detail) {
     try {
@@ -27,7 +33,9 @@
     }
   }
 
-  send("system", "Content script attached to exam page.");
+  send("system", hasExamMarker
+    ? "Content script attached to exam page."
+    : "Content script attached via forced monitoring (no #examForm on this page).");
 
   /* Webcam capture: periodic frames forwarded for CV review-score analysis.
      getUserMedia is a page-level Web API gated by the browser's own camera
