@@ -41,10 +41,17 @@
   .t-idle .type { color: #ed8936; }
   .t-system .type { color: #8895a7; }
   .thumb { display: block; max-width: 320px; border: 1px solid #37414f; border-radius: 4px; }
-  .thumb-wrap { position: relative; display: inline-block; margin-top: 5px; line-height: 0; }
-  .bbox { position: absolute; border: 2px solid #f6e05e; border-radius: 2px; box-sizing: border-box; pointer-events: none; }
-  .bbox-label { position: absolute; top: -17px; left: -2px; background: #f6e05e; color: #131a24;
-                font-size: 10px; font-weight: 700; padding: 1px 4px; border-radius: 3px; white-space: nowrap; }
+  .thumb-wrap { position: relative; display: inline-block; margin-top: 5px; line-height: 0;
+                max-width: 320px; overflow: hidden; border-radius: 4px; }
+  .bbox { position: absolute; border: 2px solid #f6e05e; border-radius: 2px; box-sizing: border-box;
+          pointer-events: none; overflow: visible; }
+  /* Anchored INSIDE the box's own top-left corner, not floating above it —
+     a box near the top edge of the thumbnail would otherwise push its label
+     out past the image into whatever log row sits above it. */
+  .bbox-label { position: absolute; top: 0; left: 0; background: #f6e05e; color: #131a24;
+                font-size: 10px; font-weight: 700; padding: 1px 4px; line-height: 1.5;
+                border-radius: 0 0 3px 0; white-space: nowrap; max-width: 100%;
+                overflow: hidden; text-overflow: ellipsis; }
   .flag { color: #fc8181; font-weight: 700; }
   .vlm { margin-top: 5px; padding: 6px 8px; background: #131a24; border-left: 3px solid #63b3ed;
          border-radius: 4px; font-size: 12px; color: #cbd5e1; }
@@ -118,7 +125,14 @@
     detections.forEach(function (det) {
       var bbox = det.bbox_xyxy;
       if (!Array.isArray(bbox) || bbox.length !== 4) return;
-      var x1 = bbox[0], y1 = bbox[1], x2 = bbox[2], y2 = bbox[3];
+      // Clamp to frame bounds — a detection near the edge can legitimately
+      // report coordinates a few px outside [0, nw]/[0, nh], which would
+      // otherwise produce a negative left/top or >100% width/height.
+      var x1 = Math.max(0, Math.min(nw, bbox[0]));
+      var y1 = Math.max(0, Math.min(nh, bbox[1]));
+      var x2 = Math.max(0, Math.min(nw, bbox[2]));
+      var y2 = Math.max(0, Math.min(nh, bbox[3]));
+      if (x2 <= x1 || y2 <= y1) return;
       var color = bboxColor(det.label);
 
       var box = document.createElement("div");
