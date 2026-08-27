@@ -40,7 +40,11 @@
   .t-extensions .type { color: #f6ad55; }
   .t-idle .type { color: #ed8936; }
   .t-system .type { color: #8895a7; }
-  .thumb { display: block; margin-top: 5px; max-width: 320px; border: 1px solid #37414f; border-radius: 4px; }
+  .thumb { display: block; max-width: 320px; border: 1px solid #37414f; border-radius: 4px; }
+  .thumb-wrap { position: relative; display: inline-block; margin-top: 5px; line-height: 0; }
+  .bbox { position: absolute; border: 2px solid #f6e05e; border-radius: 2px; box-sizing: border-box; pointer-events: none; }
+  .bbox-label { position: absolute; top: -17px; left: -2px; background: #f6e05e; color: #131a24;
+                font-size: 10px; font-weight: 700; padding: 1px 4px; border-radius: 3px; white-space: nowrap; }
   .flag { color: #fc8181; font-weight: 700; }
   .vlm { margin-top: 5px; padding: 6px 8px; background: #131a24; border-left: 3px solid #63b3ed;
          border-radius: 4px; font-size: 12px; color: #cbd5e1; }
@@ -93,6 +97,47 @@
   function isSuspect(ev) {
     var hay = ((ev.url || "") + " " + (ev.detail || "")).toLowerCase();
     return SUSPECT.some(function (k) { return hay.indexOf(k) !== -1; });
+  }
+
+  // YOLO's 7 project classes (see computer_vision/models/README.md) — a
+  // fixed color per label makes it easy to tell e.g. "phone" from "person"
+  // at a glance across many thumbnails, rather than one flat overlay color.
+  var BBOX_COLORS = {
+    person: "#68d391", phone: "#63b3ed", computer_device: "#7fd39a",
+    book_notes: "#f6ad55", calculator: "#b794f4", watch: "#4fd1c5",
+    audio_device: "#f687b3"
+  };
+  function bboxColor(label) { return BBOX_COLORS[label] || "#f6e05e"; }
+
+  // Positions boxes as percentages of the image's natural size (not its
+  // on-screen display size), so this stays correct regardless of the
+  // capture resolution content.js used or how the thumbnail is scaled by CSS.
+  function drawDetectionBoxes(wrap, img, detections) {
+    var nw = img.naturalWidth, nh = img.naturalHeight;
+    if (!nw || !nh) return;
+    detections.forEach(function (det) {
+      var bbox = det.bbox_xyxy;
+      if (!Array.isArray(bbox) || bbox.length !== 4) return;
+      var x1 = bbox[0], y1 = bbox[1], x2 = bbox[2], y2 = bbox[3];
+      var color = bboxColor(det.label);
+
+      var box = document.createElement("div");
+      box.className = "bbox";
+      box.style.borderColor = color;
+      box.style.left = (x1 / nw * 100) + "%";
+      box.style.top = (y1 / nh * 100) + "%";
+      box.style.width = ((x2 - x1) / nw * 100) + "%";
+      box.style.height = ((y2 - y1) / nh * 100) + "%";
+
+      var label = document.createElement("span");
+      label.className = "bbox-label";
+      label.style.background = color;
+      var confText = (typeof det.confidence === "number") ? det.confidence.toFixed(2) : "?";
+      label.textContent = (det.label || "?") + " " + confText;
+      box.appendChild(label);
+
+      wrap.appendChild(box);
+    });
   }
 
   async function refreshStudents() {
@@ -155,9 +200,19 @@
         '<span class="type">[' + ev.type.toUpperCase() + ']</span> ' +
         esc(ev.detail || "") + suspect;
       if (ev.image) {
+        var thumbWrap = document.createElement("div");
+        thumbWrap.className = "thumb-wrap";
         var img = document.createElement("img");
         img.src = ev.image; img.className = "thumb";
-        row.appendChild(img);
+        thumbWrap.appendChild(img);
+        row.appendChild(thumbWrap);
+
+        var detections = (ev.cv && Array.isArray(ev.cv.detections)) ? ev.cv.detections : null;
+        if (detections && detections.length) {
+          img.addEventListener("load", function () {
+            drawDetectionBoxes(thumbWrap, img, detections);
+          });
+        }
       }
       if (ev.vlm) {
         var v = document.createElement("div");

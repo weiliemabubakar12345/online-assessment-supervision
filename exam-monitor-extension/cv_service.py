@@ -307,6 +307,20 @@ def _process_frame(session: _Session, frame: np.ndarray, timestamp: float) -> Di
         "calibration_phase": calibration.get("phase"),
         "frame_count": int(session.frame_count),
         "disclaimer": review_output["disclaimer"],
+        # Raw per-frame YOLO detections (already confidence-thresholded by
+        # 02_yolo_output_adapter.py itself) so the dashboard can draw
+        # bounding boxes over the webcam thumbnail. bbox_xyxy is in the pixel
+        # space of the frame the extension captured (currently 320x240) --
+        # the dashboard reads the displayed <img>'s natural size rather than
+        # assuming that resolution, so this stays correct if it ever changes.
+        "detections": [
+            {
+                "label": str(d.get("label", "unknown")),
+                "confidence": float(d.get("confidence", 0.0)),
+                "bbox_xyxy": [float(v) for v in d.get("bbox_xyxy", [0, 0, 0, 0])],
+            }
+            for d in (yolo_output.get("detections") or [])
+        ],
     }
 
 

@@ -134,6 +134,13 @@ vonis otomatis (lihat disclaimer di `computer_vision/src/integration/README.md`
 dan `05_multi_cue_review_score.py`). Dashboard menampilkannya sebagai
 "review score" / "review level", bukan "cheating probability".
 
+**Bounding box YOLO**: tiap respons `/frame` juga membawa `detections`
+(daftar `{label, confidence, bbox_xyxy}` mentah dari `02_yolo_output_adapter.py`,
+sudah difilter confidence threshold-nya di modul itu sendiri). Dashboard
+menggambar kotak ini di atas thumbnail webcam — posisinya dihitung sebagai
+persentase dari `naturalWidth`/`naturalHeight` gambar, jadi tidak bergantung
+pada resolusi capture spesifik yang dipakai `content.js` saat ini (320×240).
+
 > **Heartbeat**: extension ping server tiap 30 detik. Kalau ping berhenti (siswa
 > menonaktifkan extension), titik siswa berubah **merah** dalam ~40 detik. Inilah
 > deteksi "monitoring dimatikan" yang dibahas — menangkap kasus *disable*, tapi
