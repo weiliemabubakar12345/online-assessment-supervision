@@ -178,6 +178,13 @@ api.idle.onStateChanged.addListener(function (state) {
 /* ---- Screenshot of the currently visible tab ---- */
 async function captureAndLog(windowId, reason) {
   try {
+    // Don't screenshot our own proctor dashboard/exam page — capturing it is
+    // recursive (a screenshot of the dashboard showing screenshots showing
+    // the dashboard...) and it isn't a "what the student is looking at"
+    // signal worth flagging; it's our own tool, not something suspicious.
+    const [activeTab] = await api.tabs.query({ active: true, windowId: windowId });
+    if (activeTab && activeTab.url && activeTab.url.indexOf(SERVER_URL) === 0) return;
+
     const dataUrl = await api.tabs.captureVisibleTab(windowId, { format: "jpeg", quality: 40 });
     await addEvent("screenshot", "Captured visible tab (" + reason + ").", { image: dataUrl });
   } catch (e) {

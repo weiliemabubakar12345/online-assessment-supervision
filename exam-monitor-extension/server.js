@@ -22,12 +22,12 @@ const PORT = 8787;
 const MAX_EVENTS_PER_STUDENT = 500;
 // VLM endpoint. Local by default; set VLM_URL to the Colab tunnel URL when the
 // VLM runs on Colab, e.g.  VLM_URL=https://xxxx.trycloudflare.com node server.js
-const VLM_URL = process.env.VLM_URL || "https://cooked-escape-abraham-tubes.trycloudflare.com";
+const VLM_URL = process.env.VLM_URL || "https://healthy-subscription-seattle-surge.trycloudflare.com";
 // CV review-score endpoint (cv_service.py). Local by default; set CV_URL to the
 // Kaggle tunnel URL when the CV pipeline runs on Kaggle — see
 // exam-monitor-extension/kaggle/README.md, e.g.
 // CV_URL=https://xxxx.trycloudflare.com node server.js
-const CV_URL = process.env.CV_URL || "https://switching-arrangements-advisor-distinct.trycloudflare.com";
+const CV_URL = process.env.CV_URL || "https://economies-dsl-hopefully-ever.trycloudflare.com";
 // Extension-side trigger threshold for a webcam-derived review_score. This is
 // NOT one of cv_service.py's own review_level tiers (MODERATE/HIGH/VERY_HIGH
 // at 0.25/0.50/0.75) — it's an ad-hoc cutoff (inside the HIGH tier) that the
@@ -156,7 +156,10 @@ const server = http.createServer(async function (req, res) {
   if (req.method === "GET" && (parsed.pathname === "/" || parsed.pathname === "/index.html")) {
     try {
       const html = fs.readFileSync(path.join(__dirname, "dashboard.html"), "utf8");
-      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      // no-store: this file changes constantly during dev/testing, and a
+      // browser silently serving a stale cached copy on a plain reload looks
+      // identical to "the fix didn't work" — not worth the ambiguity.
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
       return res.end(html);
     } catch (e) {
       res.writeHead(500); return res.end("dashboard.html not found");
@@ -168,7 +171,7 @@ const server = http.createServer(async function (req, res) {
     try {
       const html = fs.readFileSync(
         path.join(__dirname, "exam-detector-prototype.html"), "utf8");
-      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
       return res.end(html);
     } catch (e) {
       res.writeHead(500); return res.end("exam-detector-prototype.html not found");
