@@ -58,6 +58,22 @@
   .vlm-cat { display: inline-block; padding: 1px 6px; border-radius: 3px; background: #234; color: #7fd; font-weight: 700; }
   .vlm-wait { color: #f6ad55; }
   .vlm-err { color: #fc8181; }
+  /* A flagged screenshot has to be findable by eye in a long log, so the whole
+     VLM block changes colour, not just the badge. */
+  .vlm.is-cheat { border-left-color: #fc8181; background: #241519; }
+  .vlm-cheat { display: inline-block; padding: 1px 6px; border-radius: 3px;
+               background: #742a2a; color: #ffd7d7; font-weight: 700; }
+  .vlm-clean { display: inline-block; padding: 1px 6px; border-radius: 3px;
+               background: #22303c; color: #8895a7; font-weight: 700; }
+  .vlm-rel, .vlm-path { display: inline-block; padding: 1px 6px; border-radius: 3px;
+                        background: #1b2733; color: #9fb3c8; font-size: 11px; }
+  .vlm-warn { margin-top: 4px; color: #f6ad55; font-size: 11px; }
+  .toolbar { display: flex; align-items: center; gap: 14px; padding: 8px 10px; margin-bottom: 8px;
+             background: #131a24; border: 1px solid #263241; border-radius: 4px;
+             font-size: 12px; color: #cbd5e1; }
+  .toolbar label { display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+  .toolbar .count { color: #8895a7; }
+  .toolbar .count b { color: #fc8181; }
   .cv { margin-top: 5px; padding: 6px 8px; background: #131a24; border-left: 3px solid #7fd39a;
         border-radius: 4px; font-size: 12px; color: #cbd5e1; }
   .cv-score { font-weight: 700; cursor: help; }
@@ -79,18 +95,24 @@
 
 <script>
   var ONLINE_MS = 90000; // heartbeat: ~30s Chrome / 60s Firefox min — allow slack
-  // Matched against ev.url + ev.detail (lowercased) — also catches extension
-  // NAMES in "extensions" events (e.g. detail "...active: ChatGPT for Chrome"
-  // matches "chatgpt" below), not just URLs, since both flow through the same
-  // isSuspect() check.
-  var SUSPECT = ["chatgpt", "openai", "claude.ai", "gemini", "bard", "google.com/search",
-                 "bing.com/search", "quillbot", "translate", "whatsapp", "telegram", "discord",
-                 "grammarly", "chegg", "coursehero", "quizlet", "answer", "solver"];
+  // WHITELIST model: instead of listing banned sites, list the ONLY destinations
+  // allowed during the exam. Any navigation / tab-switch whose URL+title does not
+  // contain one of these substrings is flagged. Add the real exam platform's
+  // domain(s) here before a live session. Matched against ev.url + ev.detail,
+  // lowercased.
+  var ALLOWED = ["exam-detector-prototype", "localhost", "127.0.0.1", "https://internationalenglishtest.com/",
+                 location.host.toLowerCase()];
+  // Only these event types describe "where the student went" and are subject to
+  // the whitelist check. Behavioural events (copy, blur, keyboard, heartbeat,
+  // system, screenshot…) are never flagged by isSuspect().
+  var NAV_TYPES = { "navigation": 1, "tab-switch": 1 };
   // Extension-side trigger threshold for the CV pipeline's review_score
   // (mirrors server.js's CV_FLAG_THRESHOLD, which is what actually computes
   // ev.cvFlag — kept here only for display, e.g. the "reached at" hint).
   var CV_FLAG_THRESHOLD = 0.6;
   var selected = null;
+  // Survives the 2 s refresh, which rebuilds the whole log each tick.
+  var cheatOnly = false;
 
   function esc(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
@@ -102,8 +124,11 @@
     return p ? p.replace("Z", "") : (iso || "");
   }
   function isSuspect(ev) {
+    if (!NAV_TYPES[ev.type]) return false;
     var hay = ((ev.url || "") + " " + (ev.detail || "")).toLowerCase();
-    return SUSPECT.some(function (k) { return hay.indexOf(k) !== -1; });
+    // Browser withheld the URL (browser-internal page like chrome://newtab):
+    if (!ev.url && hay.indexOf("url hidden") !== -1) return false;
+    return !ALLOWED.some(function (k) { return k && hay.indexOf(k) !== -1; });
   }
 
   // YOLO's 7 project classes (see computer_vision/models/README.md) — a
@@ -194,19 +219,49 @@
     c.innerHTML = "";
     if (!evs.length) { c.innerHTML = '<div class="placeholder">No events yet.</div>'; return; }
 
+    // Counted over the FULL list, not the filtered view, so switching the
+    // filter on does not change the denominator. Screenshots still being
+    // analysed, or whose analysis errored, are not verdicts and are excluded.
+    var vlmTotal = 0, vlmCheat = 0;
+    evs.forEach(function (ev) {
+      if (ev.vlm && !ev.vlm.error && ev.vlm.status !== "analyzing") {
+        vlmTotal++;
+        if (ev.vlm.is_cheating === true) vlmCheat++;
+      }
+    });
+
+    var bar = document.createElement("div");
+    bar.className = "toolbar";
+    var lbl = document.createElement("label");
+    var cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = cheatOnly;
+    cb.addEventListener("change", function () { cheatOnly = cb.checked; refreshEvents(); });
+    lbl.appendChild(cb);
+    lbl.appendChild(document.createTextNode("Show only VLM cheat=true"));
+    bar.appendChild(lbl);
+    var cnt = document.createElement("span");
+    cnt.className = "count";
+    cnt.innerHTML = "VLM verdicts: <b>" + vlmCheat + "</b> flagged / " + vlmTotal + " analysed";
+    bar.appendChild(cnt);
+    c.appendChild(bar);
+
+    var shown = 0;
     evs.slice().reverse().forEach(function (ev) {
+      if (cheatOnly && !(ev.vlm && ev.vlm.is_cheating === true)) return;
+      shown++;
       var row = document.createElement("div");
       row.className = "entry t-" + ev.type;
-      // Rule-based keyword filter OR'd with the CV review-score threshold:
-      // either source alone is enough to flag, regardless of what the other
-      // one says. ev.cvFlag is computed server-side in server.js (the only
-      // side that can reach the CV service); isSuspect() stays local here.
+      // Whitelist check OR'd with the CV review-score threshold: either source
+      // alone is enough to flag, regardless of what the other one says.
+      // ev.cvFlag is computed server-side in server.js (the only side that can
+      // reach the CV service); isSuspect() stays local here.
       var ruleFlagged = isSuspect(ev);
       var cvFlagged = !!ev.cvFlag;
       var suspect = "";
       if (ruleFlagged || cvFlagged) {
-        var reason = (ruleFlagged && cvFlagged) ? "keyword + CV"
-          : ruleFlagged ? "keyword" : "CV review score";
+        var reason = (ruleFlagged && cvFlagged) ? "not whitelisted + CV"
+          : ruleFlagged ? "not whitelisted" : "CV review score";
         suspect = ' <span class="flag">⚠ SUSPECT (' + reason + ')</span>';
       }
       row.innerHTML =
@@ -236,8 +291,36 @@
         } else if (ev.vlm.status === "analyzing") {
           v.innerHTML = '🤖 <span class="vlm-wait">VLM analyzing…</span>';
         } else {
-          v.innerHTML = '🤖 <span class="vlm-cat">' + esc(ev.vlm.category || "?") + '</span> ' +
-            '<b>' + esc(ev.vlm.identity || "") + '</b> — ' + esc(ev.vlm.summary || "");
+          // is_cheating is the service's own verdict (category is a cheating
+          // category AND exam_relevance != none). Shown explicitly because a
+          // category alone -- "ai_assistant" -- does not say whether the
+          // service actually flagged it.
+          var cheat = ev.vlm.is_cheating === true;
+          v.className = "vlm" + (cheat ? " is-cheat" : "");
+          var bits = '🤖 <span class="vlm-cat">' + esc(ev.vlm.category || "?") + '</span> ' +
+            (cheat ? '<span class="vlm-cheat">CHEAT</span> '
+                   : '<span class="vlm-clean">clean</span> ');
+          if (ev.vlm.exam_relevance) {
+            bits += '<span class="vlm-rel">rel=' + esc(ev.vlm.exam_relevance) + '</span> ';
+          }
+          // Cascade service only (absent on the single-model service): which
+          // path the screenshot took, how sure the screening model was, and
+          // whether the dominant model overruled it.
+          if (ev.vlm.path) {
+            bits += '<span class="vlm-path">' + esc(ev.vlm.path) + '</span> ';
+          }
+          if (ev.vlm.small && typeof ev.vlm.small.confidence === "number") {
+            bits += '<span class="vlm-path">small conf ' +
+              esc(ev.vlm.small.confidence.toFixed(2)) + '</span> ';
+          }
+          if (ev.vlm.overruled_small) {
+            bits += '<span class="vlm-path">overruled small</span> ';
+          }
+          bits += '<b>' + esc(ev.vlm.identity || "") + '</b> — ' + esc(ev.vlm.summary || "");
+          if (ev.vlm.warning) {
+            bits += '<div class="vlm-warn">⚠ ' + esc(ev.vlm.warning) + '</div>';
+          }
+          v.innerHTML = bits;
         }
         row.appendChild(v);
       }
@@ -263,6 +346,13 @@
       }
       c.appendChild(row);
     });
+
+    if (!shown) {
+      var none = document.createElement("div");
+      none.className = "placeholder";
+      none.textContent = "No VLM cheat=true results yet for this student.";
+      c.appendChild(none);
+    }
   }
 
   refreshStudents();

@@ -44,19 +44,12 @@
      http://localhost:8787/exam, not a local file:// page, or the browser may
      refuse the camera. One-shot: if permission is denied, log it once and do
      not keep re-prompting. */
-  const WEBCAM_CAPTURE_INTERVAL_MS = 1000;
+  const WEBCAM_CAPTURE_INTERVAL_MS = 1000;      // steady-state rate once the CV pipeline reports READY
+  const WEBCAM_CALIBRATION_INTERVAL_MS = 200;   // faster rate while it's still calibrating (eye/gaze/head
+                                                 // calibrators need many samples — see cv_service.py)
   const WEBCAM_JPEG_QUALITY = 0.5;
   const WEBCAM_CAPTURE_WIDTH = 320;
   const WEBCAM_CAPTURE_HEIGHT = 240;
-
-  function sendWebcamFrame(dataUrl) {
-    try {
-      const p = api.runtime.sendMessage({ kind: "webcam-frame", image: dataUrl, source: location.href });
-      if (p && p.catch) p.catch(function () {});
-    } catch (e) {
-      // Background may be restarting; the frame is best-effort.
-    }
-  }
 
   if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
     navigator.mediaDevices.getUserMedia({
@@ -76,11 +69,41 @@
       const ctx = canvas.getContext("2d");
 
       send("system", "Webcam capture started.");
-      setInterval(function () {
-        if (video.readyState < 2) return; // not enough data yet
+
+      let announcedReady = false;
+
+      // Self-scheduling loop (instead of a fixed setInterval): each capture
+      // waits for the previous frame's round trip before deciding the next
+      // delay, based on the calibration_phase the server echoes back. This
+      // naturally paces to whatever the actual CV round-trip time is (never
+      // piles up concurrent requests) while still calibrating as fast as
+      // that round trip allows, then relaxes to the normal rate once READY.
+      function captureLoop() {
+        if (video.readyState < 2) { // not enough data yet
+          setTimeout(captureLoop, WEBCAM_CALIBRATION_INTERVAL_MS);
+          return;
+        }
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        sendWebcamFrame(canvas.toDataURL("image/jpeg", WEBCAM_JPEG_QUALITY));
-      }, WEBCAM_CAPTURE_INTERVAL_MS);
+        const dataUrl = canvas.toDataURL("image/jpeg", WEBCAM_JPEG_QUALITY);
+
+        Promise.resolve(api.runtime.sendMessage({ kind: "webcam-frame", image: dataUrl, source: location.href }))
+          .then(function (resp) {
+            const phase = resp && resp.calibrationPhase;
+            const stillCalibrating = !!phase && phase !== "READY";
+            if (!stillCalibrating && phase === "READY" && !announcedReady) {
+              announcedReady = true;
+              send("system", "CV calibration complete (READY) — webcam capture back to normal rate.");
+            }
+            setTimeout(captureLoop, stillCalibrating ? WEBCAM_CALIBRATION_INTERVAL_MS : WEBCAM_CAPTURE_INTERVAL_MS);
+          })
+          .catch(function () {
+            // Background/service worker unreachable — fall back to the
+            // normal rate rather than hammering it at the fast interval.
+            setTimeout(captureLoop, WEBCAM_CAPTURE_INTERVAL_MS);
+          });
+      }
+
+      captureLoop();
     }).catch(function (e) {
       send("system", "Webcam permission denied or unavailable: " + e.message);
     });

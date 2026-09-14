@@ -1,18 +1,30 @@
 # Running the proctoring services on Kaggle (free GPU)
 
-[`teep_proctoring_services.ipynb`](teep_proctoring_services.ipynb) runs
-**both** model services this project needs, in one Kaggle notebook, using
-Kaggle's free GPU instead of your own machine:
-
-- `vlm_service.py` — Qwen2.5-VL-3B screenshot analysis (port `8788`)
-- `cv_service.py` — head/gaze + YOLO + review-score pipeline (port `8789`)
-
-Each is exposed through its own `cloudflared` quick tunnel, the same pattern
-already used for `VLM_URL` with a Colab-hosted VLM. The notebook embeds both
-services' source directly (`%%writefile` cells, kept in sync with
-`exam-monitor-extension/vlm_service.py` / `cv_service.py`) so it's
-self-contained — it does not `git clone` this (private) repo, avoiding any
+Three notebooks, all using Kaggle's free GPU instead of your own machine.
+Each embeds its service source directly (`%%writefile` cells, kept in sync
+with the corresponding file under `exam-monitor-extension/`) so it's
+self-contained — none of them `git clone` this (private) repo, avoiding any
 GitHub-credential entanglement inside the notebook.
+
+| Notebook | Runs | Ports |
+|---|---|---|
+| [`teep_proctoring_services.ipynb`](teep_proctoring_services.ipynb) | `vlm_service.py` (single-model, Qwen2.5-VL-3B) + `cv_service.py` | VLM `8788`, CV `8789` |
+| [`teep_cascade_vlm_service.ipynb`](teep_cascade_vlm_service.ipynb) | `vlm_service_cascade.py` only — no CV, no evaluation | VLM `8791` |
+| [`teep_proctoring_services_cascade.ipynb`](teep_proctoring_services_cascade.ipynb) | `vlm_service_cascade.py` + `cv_service.py` | VLM `8791`, CV `8789` |
+
+`vlm_service_cascade.py` runs a small model (SmolVLM-500M) that screens every
+screenshot, escalating only the ones it cannot confidently clear to the large
+model (Qwen2.5-VL) — see
+[`../README.md`'s VLM cheating decision section](../README.md#vlm-cheating-decision-is_cheating)
+for the routing logic. The same file also serves two single-model baselines
+via `MODE=large_only` / `MODE=small_only` (set in each cascade notebook's
+configuration section), so an accuracy/latency comparison isn't confounded by
+a different code path. Pick the plain `teep_proctoring_services.ipynb` for the
+already-deployed single-model service, or one of the cascade notebooks when
+evaluating/running the cascade architecture instead.
+
+Each service is exposed through its own `cloudflared` quick tunnel, the same
+pattern already used for `VLM_URL` with a Colab-hosted VLM.
 
 ## 1. One-time: package the CV assets as a Kaggle Dataset
 
@@ -87,15 +99,23 @@ kernel and re-run from the top before continuing.
 
 ## 2. Run the notebook
 
-1. Upload `teep_proctoring_services.ipynb` to Kaggle (or open it there
-   directly), attach the dataset from step 1.
+1. Upload whichever notebook you need to Kaggle (or open it there directly).
+   Attach the dataset from step 1 **unless** you're running
+   `teep_cascade_vlm_service.ipynb` — that one has no CV service, so it needs
+   no dataset.
 2. **Settings → Accelerator → GPU**, **Internet → On**.
-3. Run all cells top to bottom. `vlm_service.py` additionally downloads
-   `Qwen/Qwen2.5-VL-3B-Instruct` from Hugging Face on first run (a few GB) —
-   unrelated to the attached dataset.
-4. The last cell prints both tunnel URLs. On the machine running `server.js`:
+3. Run all cells top to bottom. The VLM service(s) additionally download
+   their model(s) from Hugging Face on first run (a few GB each —
+   `Qwen/Qwen2.5-VL-3B-Instruct` for the single-model service,
+   `Qwen/Qwen2.5-VL-7B-Instruct` + `HuggingFaceTB/SmolVLM-500M-Instruct` for
+   the cascade) — unrelated to the attached dataset.
+4. The last cell prints one tunnel URL per running service. On the machine
+   running `server.js`:
    ```bash
+   # single-model notebook:
    VLM_URL=https://xxxx.trycloudflare.com CV_URL=https://yyyy.trycloudflare.com node server.js
+   # cascade notebook (VLM_URL now points at the cascade service instead):
+   VLM_URL=https://zzzz.trycloudflare.com CV_URL=https://yyyy.trycloudflare.com node server.js
    ```
 
 ## 3. Verify before touching the extension

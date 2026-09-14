@@ -46,22 +46,26 @@ async function addEvent(type, detail, extra) {
   if (events.length > MAX_EVENTS) events = events.slice(-MAX_EVENTS);
   await api.storage.local.set({ events: events });
 
-  // Forward to the proctor server (best-effort).
+  // Forward to the proctor server (best-effort). Callers that need the
+  // server's response (currently: webcam frames, for calibration_phase) can
+  // await the returned promise; everyone else fires-and-forgets it.
   const sid = await getStudentId();
-  postToServer("/events", { studentId: sid, event: rec });
+  return postToServer("/events", { studentId: sid, event: rec });
 }
 
 /* ---- Talk to the proctor server ---- */
 async function postToServer(path, body) {
   try {
-    await fetch(SERVER_URL + path, {
+    const r = await fetch(SERVER_URL + path, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
     });
+    return await r.json();
   } catch (e) {
     // Server offline: this prototype drops it. A real system would queue/retry;
     // the missing heartbeat below already tells the proctor the student went dark.
+    return null;
   }
 }
 
@@ -74,10 +78,23 @@ function ensureHeartbeatAlarm() {
   // Chrome honors ~30s; Firefox clamps to a 60s minimum — both fine.
   api.alarms.create("heartbeat", { periodInMinutes: 0.5 });
 }
-api.alarms.onAlarm.addListener(function (a) {
+api.alarms.onAlarm.addListener(async function (a) {
   if (a.name === "heartbeat") {
     sendHeartbeat();
     checkInstalledExtensions();
+    /* Periodic screen capture. Without this the VLM only ever sees the screen at
+       the moment of a tab or window switch, so two real cheating patterns are
+       never captured at all: a side-by-side window the student never clicks
+       into, and typing a cheat URL into the address bar of the current tab
+       (tabs.onUpdated logs a "navigation" event but takes no screenshot).
+       Firefox clamps alarms to 60s, so a behaviour must last >60s to be sure
+       of being caught here; the evaluation protocol allows for that. */
+    try {
+      const w = await api.windows.getLastFocused({});
+      if (w && w.focused) captureAndLog(w.id, "periodic");
+    } catch (e) {
+      addEvent("system", "Periodic capture skipped: " + e.message);
+    }
   }
 });
 
@@ -127,8 +144,17 @@ api.runtime.onMessage.addListener(function (msg) {
   } else if (msg && msg.kind === "webcam-frame") {
     // Periodic webcam frame from content.js; forwarded via the same
     // addEvent()/postToServer() pipeline. The server routes event.type ===
-    // "webcam" to the CV review-score service (see server.js).
-    addEvent("webcam", "Webcam frame captured.", { source: msg.source, image: msg.image });
+    // "webcam" to the CV review-score service (see server.js). Unlike the
+    // "event" branch above, this one returns a promise: content.js needs
+    // calibration_phase back so it can speed up capture while the CV
+    // pipeline is still calibrating and drop back to the normal rate once
+    // READY (see server.js's /events handler, which awaits analyzeWithCV
+    // and echoes event.cv back specifically for this purpose).
+    return addEvent("webcam", "Webcam frame captured.", { source: msg.source, image: msg.image })
+      .then(function (result) {
+        const cv = result && result.cv;
+        return { calibrationPhase: (cv && cv.calibration_phase) || null };
+      });
   }
 });
 
@@ -185,8 +211,14 @@ async function captureAndLog(windowId, reason) {
     const [activeTab] = await api.tabs.query({ active: true, windowId: windowId });
     if (activeTab && activeTab.url && activeTab.url.indexOf(SERVER_URL) === 0) return;
 
+    // Timing for the T_capture + T_network + T_inference decomposition the
+    // evaluation protocol reports. t0 -> capturedAt measures the browser's own
+    // screenshot cost; the server derives the rest from capturedAt.
+    const t0 = Date.now();
     const dataUrl = await api.tabs.captureVisibleTab(windowId, { format: "jpeg", quality: 40 });
-    await addEvent("screenshot", "Captured visible tab (" + reason + ").", { image: dataUrl });
+    const tCaptureMs = Date.now() - t0;
+    await addEvent("screenshot", "Captured visible tab (" + reason + ").",
+                   { image: dataUrl, capturedAt: Date.now(), tCaptureMs: tCaptureMs, captureReason: reason });
   } catch (e) {
     // Expected on restricted pages (about:, chrome://, the add-on store) or
     // throttling, or if host permission isn't granted yet — log softly.
