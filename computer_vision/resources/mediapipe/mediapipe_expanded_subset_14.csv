@@ -1,0 +1,15 @@
+mediapipe_landmark_id,group,description,x_canonical_cm,y_canonical_cm,z_canonical_cm
+10,midline,upper forehead,0.0,8.261778,4.481535
+168,midline,nose bridge,0.0,3.271027,5.236015
+4,midline,central nose tip,0.0,-0.46317,7.58658
+1,midline,lower central nose,0.0,-1.126865,7.475604
+199,midline,lower central face,0.0,-7.942194,5.181173
+152,midline,chin,0.0,-9.403378,4.264492
+33,left_eye,left eye outer corner,-4.445859,2.663991,3.173422
+133,left_eye,left eye inner corner,-1.856432,2.585245,3.757904
+362,right_eye,right eye inner corner,1.856432,2.585245,3.757904
+263,right_eye,right eye outer corner,4.445859,2.663991,3.173422
+61,mouth,left mouth corner,-2.456206,-4.342621,4.283884
+291,mouth,right mouth corner,2.456206,-4.342621,4.283884
+234,face_side,left lateral face,-7.664182,0.673132,-2.435867
+454,face_side,right lateral face,7.664182,0.673132,-2.435867

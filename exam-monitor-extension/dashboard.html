@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Proctor Dashboard</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, Segoe UI, Arial, sans-serif;
+         background: #0f1115; color: #d6deeb; height: 100vh; display: flex; flex-direction: column; }
+  header { padding: 12px 16px; border-bottom: 1px solid #1e2430; display: flex;
+           align-items: center; justify-content: space-between; }
+  header h1 { font-size: 16px; margin: 0; }
+  header .meta { font-size: 12px; color: #8895a7; }
+  .main { flex: 1; display: flex; min-height: 0; }
+  .sidebar { width: 260px; border-right: 1px solid #1e2430; overflow-y: auto; }
+  .stu { padding: 10px 14px; border-bottom: 1px solid #1a2029; cursor: pointer; display: flex;
+         align-items: center; gap: 8px; }
+  .stu:hover { background: #171c24; }
+  .stu.sel { background: #1d2530; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .on  { background: #48bb78; box-shadow: 0 0 6px #48bb78; }
+  .off { background: #f56565; }
+  .stu .id { font-size: 13px; font-weight: 600; }
+  .stu .sub { font-size: 11px; color: #8895a7; }
+  .content { flex: 1; overflow-y: auto; padding: 8px 16px 24px; }
+  .placeholder { color: #8895a7; padding: 40px; text-align: center; }
+  .entry { padding: 5px 0; border-bottom: 1px solid #1a2029; font-family: ui-monospace, Consolas, monospace;
+           font-size: 12px; word-break: break-word; }
+  .entry .ts { color: #7f9cf5; }
+  .entry .type { font-weight: 700; }
+  .t-visibility .type, .t-blur .type, .t-focus .type { color: #f6ad55; }
+  .t-tab-switch .type, .t-navigation .type { color: #63b3ed; }
+  .t-copy .type, .t-paste .type { color: #68d391; }
+  .t-contextmenu .type { color: #fc8181; }
+  .t-keyboard .type { color: #b794f4; }
+  .t-mouseleave .type { color: #f6e05e; }
+  .t-mutation .type { color: #4fd1c5; }
+  .t-screenshot .type { color: #f687b3; }
+  .t-webcam .type { color: #7fd; }
+  .t-extensions .type { color: #f6ad55; }
+  .t-idle .type { color: #ed8936; }
+  .t-system .type { color: #8895a7; }
+  .thumb { display: block; max-width: 320px; border: 1px solid #37414f; border-radius: 4px; }
+  .thumb-wrap { position: relative; display: inline-block; margin-top: 5px; line-height: 0;
+                max-width: 320px; overflow: hidden; border-radius: 4px; }
+  .bbox { position: absolute; border: 2px solid #f6e05e; border-radius: 2px; box-sizing: border-box;
+          pointer-events: none; overflow: visible; }
+  /* Anchored INSIDE the box's own top-left corner, not floating above it —
+     a box near the top edge of the thumbnail would otherwise push its label
+     out past the image into whatever log row sits above it. */
+  .bbox-label { position: absolute; top: 0; left: 0; background: #f6e05e; color: #131a24;
+                font-size: 10px; font-weight: 700; padding: 1px 4px; line-height: 1.5;
+                border-radius: 0 0 3px 0; white-space: nowrap; max-width: 100%;
+                overflow: hidden; text-overflow: ellipsis; }
+  .flag { color: #fc8181; font-weight: 700; }
+  .vlm { margin-top: 5px; padding: 6px 8px; background: #131a24; border-left: 3px solid #63b3ed;
+         border-radius: 4px; font-size: 12px; color: #cbd5e1; }
+  .vlm-cat { display: inline-block; padding: 1px 6px; border-radius: 3px; background: #234; color: #7fd; font-weight: 700; }
+  .vlm-wait { color: #f6ad55; }
+  .vlm-err { color: #fc8181; }
+  /* A flagged screenshot has to be findable by eye in a long log, so the whole
+     VLM block changes colour, not just the badge. */
+  .vlm.is-cheat { border-left-color: #fc8181; background: #241519; }
+  .vlm-cheat { display: inline-block; padding: 1px 6px; border-radius: 3px;
+               background: #742a2a; color: #ffd7d7; font-weight: 700; }
+  .vlm-clean { display: inline-block; padding: 1px 6px; border-radius: 3px;
+               background: #22303c; color: #8895a7; font-weight: 700; }
+  .vlm-rel, .vlm-path { display: inline-block; padding: 1px 6px; border-radius: 3px;
+                        background: #1b2733; color: #9fb3c8; font-size: 11px; }
+  .vlm-warn { margin-top: 4px; color: #f6ad55; font-size: 11px; }
+  .toolbar { display: flex; align-items: center; gap: 14px; padding: 8px 10px; margin-bottom: 8px;
+             background: #131a24; border: 1px solid #263241; border-radius: 4px;
+             font-size: 12px; color: #cbd5e1; }
+  .toolbar label { display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+  .toolbar .count { color: #8895a7; }
+  .toolbar .count b { color: #fc8181; }
+  .cv { margin-top: 5px; padding: 6px 8px; background: #131a24; border-left: 3px solid #7fd39a;
+        border-radius: 4px; font-size: 12px; color: #cbd5e1; }
+  .cv-score { font-weight: 700; cursor: help; }
+  .cv-wait { color: #f6ad55; }
+  .cv-err { color: #fc8181; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Proctor Dashboard</h1>
+    <span class="meta" id="meta">connecting…</span>
+  </header>
+  <div class="main">
+    <div class="sidebar" id="sidebar"></div>
+    <div class="content" id="content">
+      <div class="placeholder">Select a student to view their activity log.</div>
+    </div>
+  </div>
+
+<script>
+  var ONLINE_MS = 90000; // heartbeat: ~30s Chrome / 60s Firefox min — allow slack
+  // WHITELIST model: instead of listing banned sites, list the ONLY destinations
+  // allowed during the exam. Any navigation / tab-switch whose URL+title does not
+  // contain one of these substrings is flagged. Add the real exam platform's
+  // domain(s) here before a live session. Matched against ev.url + ev.detail,
+  // lowercased.
+  var ALLOWED = ["exam-detector-prototype", "localhost", "127.0.0.1", "https://internationalenglishtest.com/",
+                 location.host.toLowerCase()];
+  // Only these event types describe "where the student went" and are subject to
+  // the whitelist check. Behavioural events (copy, blur, keyboard, heartbeat,
+  // system, screenshot…) are never flagged by isSuspect().
+  var NAV_TYPES = { "navigation": 1, "tab-switch": 1 };
+  // Extension-side trigger threshold for the CV pipeline's review_score
+  // (mirrors server.js's CV_FLAG_THRESHOLD, which is what actually computes
+  // ev.cvFlag — kept here only for display, e.g. the "reached at" hint).
+  var CV_FLAG_THRESHOLD = 0.6;
+  var selected = null;
+  // Survives the 2 s refresh, which rebuilds the whole log each tick.
+  var cheatOnly = false;
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function timeOnly(iso) {
+    var p = (iso || "").split("T")[1];
+    return p ? p.replace("Z", "") : (iso || "");
+  }
+  function isSuspect(ev) {
+    if (!NAV_TYPES[ev.type]) return false;
+    var hay = ((ev.url || "") + " " + (ev.detail || "")).toLowerCase();
+    // Browser withheld the URL (browser-internal page like chrome://newtab):
+    if (!ev.url && hay.indexOf("url hidden") !== -1) return false;
+    return !ALLOWED.some(function (k) { return k && hay.indexOf(k) !== -1; });
+  }
+
+  // YOLO's 7 project classes (see computer_vision/models/README.md) — a
+  // fixed color per label makes it easy to tell e.g. "phone" from "person"
+  // at a glance across many thumbnails, rather than one flat overlay color.
+  var BBOX_COLORS = {
+    person: "#68d391", phone: "#63b3ed", computer_device: "#7fd39a",
+    book_notes: "#f6ad55", calculator: "#b794f4", watch: "#4fd1c5",
+    audio_device: "#f687b3"
+  };
+  function bboxColor(label) { return BBOX_COLORS[label] || "#f6e05e"; }
+
+  // Positions boxes as percentages of the image's natural size (not its
+  // on-screen display size), so this stays correct regardless of the
+  // capture resolution content.js used or how the thumbnail is scaled by CSS.
+  function drawDetectionBoxes(wrap, img, detections) {
+    var nw = img.naturalWidth, nh = img.naturalHeight;
+    if (!nw || !nh) return;
+    detections.forEach(function (det) {
+      var bbox = det.bbox_xyxy;
+      if (!Array.isArray(bbox) || bbox.length !== 4) return;
+      // Clamp to frame bounds — a detection near the edge can legitimately
+      // report coordinates a few px outside [0, nw]/[0, nh], which would
+      // otherwise produce a negative left/top or >100% width/height.
+      var x1 = Math.max(0, Math.min(nw, bbox[0]));
+      var y1 = Math.max(0, Math.min(nh, bbox[1]));
+      var x2 = Math.max(0, Math.min(nw, bbox[2]));
+      var y2 = Math.max(0, Math.min(nh, bbox[3]));
+      if (x2 <= x1 || y2 <= y1) return;
+      var color = bboxColor(det.label);
+
+      var box = document.createElement("div");
+      box.className = "bbox";
+      box.style.borderColor = color;
+      box.style.left = (x1 / nw * 100) + "%";
+      box.style.top = (y1 / nh * 100) + "%";
+      box.style.width = ((x2 - x1) / nw * 100) + "%";
+      box.style.height = ((y2 - y1) / nh * 100) + "%";
+
+      var label = document.createElement("span");
+      label.className = "bbox-label";
+      label.style.background = color;
+      var confText = (typeof det.confidence === "number") ? det.confidence.toFixed(2) : "?";
+      label.textContent = (det.label || "?") + " " + confText;
+      box.appendChild(label);
+
+      wrap.appendChild(box);
+    });
+  }
+
+  async function refreshStudents() {
+    var list;
+    try {
+      list = await (await fetch("/students")).json();
+    } catch (e) {
+      document.getElementById("meta").textContent = "server unreachable";
+      return;
+    }
+    var now = Date.now();
+    document.getElementById("meta").textContent =
+      list.length + " student(s) • updated " + timeOnly(new Date().toISOString());
+
+    list.sort(function (a, b) { return b.lastSeen - a.lastSeen; });
+    var sb = document.getElementById("sidebar");
+    sb.innerHTML = "";
+    list.forEach(function (s) {
+      var online = (now - s.lastSeen) < ONLINE_MS;
+      var div = document.createElement("div");
+      div.className = "stu" + (s.studentId === selected ? " sel" : "");
+      div.innerHTML =
+        '<span class="dot ' + (online ? "on" : "off") + '"></span>' +
+        '<div><div class="id">' + esc(s.studentId) + '</div>' +
+        '<div class="sub">' + s.eventCount + ' events • ' +
+          (online ? "online" : "OFFLINE (extension disabled?)") + '</div></div>';
+      div.addEventListener("click", function () { selected = s.studentId; refreshEvents(); refreshStudents(); });
+      sb.appendChild(div);
+    });
+  }
+
+  async function refreshEvents() {
+    if (!selected) return;
+    var evs;
+    try {
+      evs = await (await fetch("/events?studentId=" + encodeURIComponent(selected))).json();
+    } catch (e) { return; }
+
+    var c = document.getElementById("content");
+    c.innerHTML = "";
+    if (!evs.length) { c.innerHTML = '<div class="placeholder">No events yet.</div>'; return; }
+
+    // Counted over the FULL list, not the filtered view, so switching the
+    // filter on does not change the denominator. Screenshots still being
+    // analysed, or whose analysis errored, are not verdicts and are excluded.
+    var vlmTotal = 0, vlmCheat = 0;
+    evs.forEach(function (ev) {
+      if (ev.vlm && !ev.vlm.error && ev.vlm.status !== "analyzing") {
+        vlmTotal++;
+        if (ev.vlm.is_cheating === true) vlmCheat++;
+      }
+    });
+
+    var bar = document.createElement("div");
+    bar.className = "toolbar";
+    var lbl = document.createElement("label");
+    var cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = cheatOnly;
+    cb.addEventListener("change", function () { cheatOnly = cb.checked; refreshEvents(); });
+    lbl.appendChild(cb);
+    lbl.appendChild(document.createTextNode("Show only VLM cheat=true"));
+    bar.appendChild(lbl);
+    var cnt = document.createElement("span");
+    cnt.className = "count";
+    cnt.innerHTML = "VLM verdicts: <b>" + vlmCheat + "</b> flagged / " + vlmTotal + " analysed";
+    bar.appendChild(cnt);
+    c.appendChild(bar);
+
+    var shown = 0;
+    evs.slice().reverse().forEach(function (ev) {
+      if (cheatOnly && !(ev.vlm && ev.vlm.is_cheating === true)) return;
+      shown++;
+      var row = document.createElement("div");
+      row.className = "entry t-" + ev.type;
+      // Whitelist check OR'd with the CV review-score threshold: either source
+      // alone is enough to flag, regardless of what the other one says.
+      // ev.cvFlag is computed server-side in server.js (the only side that can
+      // reach the CV service); isSuspect() stays local here.
+      var ruleFlagged = isSuspect(ev);
+      var cvFlagged = !!ev.cvFlag;
+      var suspect = "";
+      if (ruleFlagged || cvFlagged) {
+        var reason = (ruleFlagged && cvFlagged) ? "not whitelisted + CV"
+          : ruleFlagged ? "not whitelisted" : "CV review score";
+        suspect = ' <span class="flag">⚠ SUSPECT (' + reason + ')</span>';
+      }
+      row.innerHTML =
+        '<span class="ts">' + timeOnly(ev.timestamp) + '</span> ' +
+        '<span class="type">[' + ev.type.toUpperCase() + ']</span> ' +
+        esc(ev.detail || "") + suspect;
+      if (ev.image) {
+        var thumbWrap = document.createElement("div");
+        thumbWrap.className = "thumb-wrap";
+        var img = document.createElement("img");
+        img.src = ev.image; img.className = "thumb";
+        thumbWrap.appendChild(img);
+        row.appendChild(thumbWrap);
+
+        var detections = (ev.cv && Array.isArray(ev.cv.detections)) ? ev.cv.detections : null;
+        if (detections && detections.length) {
+          img.addEventListener("load", function () {
+            drawDetectionBoxes(thumbWrap, img, detections);
+          });
+        }
+      }
+      if (ev.vlm) {
+        var v = document.createElement("div");
+        v.className = "vlm";
+        if (ev.vlm.error) {
+          v.innerHTML = '🤖 <span class="vlm-err">VLM: ' + esc(ev.vlm.error) + '</span>';
+        } else if (ev.vlm.status === "analyzing") {
+          v.innerHTML = '🤖 <span class="vlm-wait">VLM analyzing…</span>';
+        } else {
+          // is_cheating is the service's own verdict (category is a cheating
+          // category AND exam_relevance != none). Shown explicitly because a
+          // category alone -- "ai_assistant" -- does not say whether the
+          // service actually flagged it.
+          var cheat = ev.vlm.is_cheating === true;
+          v.className = "vlm" + (cheat ? " is-cheat" : "");
+          var bits = '🤖 <span class="vlm-cat">' + esc(ev.vlm.category || "?") + '</span> ' +
+            (cheat ? '<span class="vlm-cheat">CHEAT</span> '
+                   : '<span class="vlm-clean">clean</span> ');
+          if (ev.vlm.exam_relevance) {
+            bits += '<span class="vlm-rel">rel=' + esc(ev.vlm.exam_relevance) + '</span> ';
+          }
+          // Cascade service only (absent on the single-model service): which
+          // path the screenshot took, how sure the screening model was, and
+          // whether the dominant model overruled it.
+          if (ev.vlm.path) {
+            bits += '<span class="vlm-path">' + esc(ev.vlm.path) + '</span> ';
+          }
+          if (ev.vlm.small && typeof ev.vlm.small.confidence === "number") {
+            bits += '<span class="vlm-path">small conf ' +
+              esc(ev.vlm.small.confidence.toFixed(2)) + '</span> ';
+          }
+          if (ev.vlm.overruled_small) {
+            bits += '<span class="vlm-path">overruled small</span> ';
+          }
+          bits += '<b>' + esc(ev.vlm.identity || "") + '</b> — ' + esc(ev.vlm.summary || "");
+          if (ev.vlm.warning) {
+            bits += '<div class="vlm-warn">⚠ ' + esc(ev.vlm.warning) + '</div>';
+          }
+          v.innerHTML = bits;
+        }
+        row.appendChild(v);
+      }
+      if (ev.cv) {
+        var cv = document.createElement("div");
+        cv.className = "cv";
+        if (ev.cv.error) {
+          cv.innerHTML = '📹 <span class="cv-err">CV: ' + esc(ev.cv.error) + '</span>';
+        } else if (ev.cv.status === "analyzing") {
+          cv.innerHTML = '📹 <span class="cv-wait">CV analyzing…</span>';
+        } else {
+          // "review score", never "cheating probability" — the CV module's own
+          // docs are explicit this is an experimental prioritisation
+          // indicator, not a calibrated verdict; the disclaimer string is
+          // shown as a hover tooltip rather than inline on every row.
+          var scoreText = (typeof ev.cv.review_score === "number") ? ev.cv.review_score.toFixed(2) : "?";
+          cv.title = ev.cv.disclaimer || "";
+          cv.innerHTML = '📹 <span class="cv-score">review score ' + esc(scoreText) +
+            ' (' + esc(ev.cv.review_level || "?") + ')</span> ' +
+            '<span style="color:#8895a7">calibration: ' + esc(ev.cv.calibration_phase || "?") + '</span>';
+        }
+        row.appendChild(cv);
+      }
+      c.appendChild(row);
+    });
+
+    if (!shown) {
+      var none = document.createElement("div");
+      none.className = "placeholder";
+      none.textContent = "No VLM cheat=true results yet for this student.";
+      c.appendChild(none);
+    }
+  }
+
+  refreshStudents();
+  setInterval(refreshStudents, 2000);
+  setInterval(refreshEvents, 2000);
+</script>
+</body>
+</html>
